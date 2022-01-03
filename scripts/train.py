@@ -1,111 +1,97 @@
 from pathlib import Path
 
+import click
+import omegaconf
 import torch
 import numpy as np
+import torchvision.datasets
+from torchvision.transforms import ToTensor
 
 from data.data import MyImageFolderDataset
+from model.diffusion import GaussianDiffusion
 from model.unet import UNet, DiffusionModel
 import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
+from utils.config import get_class_from_str
 
-def train_step(model, noise_level, loss_fn, opt, x):
-    N, C, X, Y = x.shape
-    t = torch.randint(0, len(noise_level), [N], device=x.device)
-    noise_scale = noise_level[t].unsqueeze(1).reshape(N, 1, 1, 1)
-    noise_scale_sqrt = noise_scale ** 0.5
-    noise = torch.randn_like(x)
-
-    noisy_x = noise_scale_sqrt * x + (1.0 - noise_scale) ** 0.5 * noise
-    opt.zero_grad()
-    predicted = model(noisy_x, t)
-    loss = loss_fn(noise, predicted.squeeze(1))
-    loss.backward()
-    opt.step()
-    return loss
+device = 'cuda'
 
 
-def train():
-    run_path = "runs/1"
-    Path(run_path).mkdir(parents=True, exist_ok=True)
-    tb_writer = SummaryWriter("runs/1")
-    model = DiffusionModel().to("cuda")
-    opt = torch.optim.Adam(model.parameters(), lr=3e-5)
-    loss_fn = torch.nn.L1Loss()
-    steps = torch.linspace(1e-4, 0.05, 100).to("cuda")
-    inference_steps = torch.linspace(1e-4, 0.05, 100).to("cuda")
+class DatasetWrapper(torch.utils.data.Dataset):
+    def __init__(self, dataset):
+        self.dataset = dataset
 
-    dataset = MyImageFolderDataset(
-        data_dir="/media/lleonard/big_slow_disk/datasets/ffhq/images1024x1024/",
-        resize=128,
-    )
-    dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=16, shuffle=True, num_workers=8, pin_memory=True
-    )
-    noise_level = torch.cumprod(1 - steps, dim=0).to(torch.float32).to("cuda")
+    def __len__(self):
+        return len(self.dataset)
 
-    pbar = tqdm.tqdm(enumerate(dataloader), total=len(dataloader))
-    for i, (x, t) in pbar:
-        x = x.to("cuda")
-        loss = train_step(model, noise_level, loss_fn, opt, x)
-        tb_writer.add_scalar("loss", loss, i)
-        if i % 100 == 0:
-            image = inference(model, steps)
-            tb_writer.add_image("image", image, i)
-        pbar.set_description(f"loss: {loss.item():.4f}")
-    torch.save(
-        {
-            "model": model.state_dict(),
-            "opt": opt.state_dict(),
-        },
-        run_path + "/model.pt",
-    )
+    def __getitem__(self, index):
+        x = self.dataset[index]
+        image = x[0]
+        if not isinstance(image, torch.Tensor):
+            image = ToTensor()(image)
+        return image, x[1]
 
+def train(config_path, name, epochs, resume_from):
+    run_path = f"runs/{name}"
+    config = omegaconf.OmegaConf.load(config_path)
 
-@torch.no_grad()
-def inference(model, training_noise_schedule, inference_noise_schedule):
-    model.eval()
+    tb_writer = SummaryWriter(run_path)
+    model = DiffusionModel(**config.model.params)
+    model.to(device)
+    diffusion = GaussianDiffusion(model, **config.diffusion.params).to(device)
+    opt = torch.optim.Adam(diffusion.parameters(), lr=config.training.learning_rate)
+    step = 0
+    if resume_from is not None:
+        print(f"Resuming from {resume_from}")
+        checkpoint = torch.load(resume_from)
+        diffusion.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        opt.load_state_dict(checkpoint['optimizer_state_dict'])
+        step = checkpoint['step']
+    print('creating dataset')
+    dataset = DatasetWrapper(get_class_from_str(config.data.target)(**config.data.params))
 
-    talpha = 1 - training_noise_schedule
-    talpha_cum = torch.cumprod(talpha, dim=0)
-    inference_noise_schedule = training_noise_schedule
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.training.batch_size, shuffle=True, num_workers=4)
+    print('training')
+    for epoch in range(epochs):
+        tb_writer.add_scalar('epoch', epoch, step)
+        pbar = tqdm.tqdm(dataloader)
+        for image, class_id in pbar:
+            image = image.to(device)
+            class_id = class_id.to(device)
+            opt.zero_grad()
+            loss = diffusion(image, class_id)
+            tb_writer.add_scalar("loss", loss.item(), step)
+            loss.backward()
+            opt.step()
+            pbar.set_description(f"{step}: {loss.item():.4f}")
+            if step % 1000 == 0:
+                generated = diffusion.p_sample_loop((1, 1, 28, 28), torch.tensor([8]).to(device)).squeeze(0)
+                tb_writer.add_image("image", generated, step)
+                tb_writer.add_image("real_image", image[0], step)
+                torch.save({
+                    'model_state_dict': diffusion.state_dict(),
+                    'optimizer_state_dict': opt.state_dict(),
+                    'step': step,
+                    'epoch': epoch
+                }, Path(run_path) / f'diffusion_{step}.pt')
+            step = step + 1
 
-    beta = inference_noise_schedule
-    alpha = 1 - beta
-    alpha_cum = torch.cumprod(alpha, dim=0)
-
-    T = []
-    for s in range(len(inference_noise_schedule)):
-        for t in range(len(training_noise_schedule) - 1):
-            if talpha_cum[t + 1] <= alpha_cum[s] <= talpha_cum[t]:
-                twiddle = (talpha_cum[t] ** 0.5 - alpha_cum[s] ** 0.5) / (
-                    talpha_cum[t] ** 0.5 - talpha_cum[t + 1] ** 0.5
-                )
-                T.append((t + twiddle).cpu().item())
-                break
-    T = np.array(T, dtype=np.float32)
-    noisy_image = torch.randn(1, 3, 128, 128, device="cuda")
-    for n in range(len(alpha) - 1, -1, -1):
-        c1 = 1 / alpha[n] ** 0.5
-        c2 = beta[n] / (1 - alpha_cum[n]) ** 0.5
-        noisy_image = c1 * (
-            noisy_image
-            - c2
-            * model(
-                noisy_image, torch.tensor([T[n]], device=noisy_image.device)
-            ).squeeze(1)
-        )
-        if n > 0:
-            noise = torch.randn_like(noisy_image)
-            sigma = ((1.0 - alpha_cum[n - 1]) / (1.0 - alpha_cum[n]) * beta[n]) ** 0.5
-            noisy_image += sigma * noise
-        noisy_image = torch.clamp(noisy_image, -1.0, 1.0)
-    model.train()
-    return noisy_image.squeeze(0)
+        torch.save({
+            'model_state_dict': diffusion.state_dict(),
+            'optimizer_state_dict': opt.state_dict(),
+            'step': step,
+            'epoch': epoch
+        }, Path(run_path) / f'diffusion_{step}.pt')
 
 
-def main():
-    train()
+@click.command()
+@click.option('--config', '-c')
+@click.option('--name', '-n')
+@click.option('--epochs', '-e', default=10)
+@click.option('--resume-from', '-r', default=None)
+def main(config: str, name: str, resume_from: str, epochs: int):
+    train(config, name, epochs, resume_from)
 
 
 if __name__ == "__main__":

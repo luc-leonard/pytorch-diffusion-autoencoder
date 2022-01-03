@@ -1,21 +1,12 @@
 from functools import partial
-from inspect import isfunction
 
-import torch
-from torch import nn
 import numpy as np
-from tqdm import tqdm
+import torch
 import torch.nn.functional as F
+from torch import nn
+from tqdm import tqdm
 
-
-def exists(x):
-    return x is not None
-
-
-def default(val, d):
-    if exists(val):
-        return val
-    return d() if isfunction(d) else d
+from utils.config import exists, default
 
 
 def cosine_beta_schedule(timesteps, s=0.008):
@@ -144,8 +135,8 @@ class GaussianDiffusion(nn.Module):
         )
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
-    def p_mean_variance(self, x, t, clip_denoised: bool):
-        x_recon = self.predict_start_from_noise(x, t=t, noise=self.denoise_fn(x, t))
+    def p_mean_variance(self, x, t, class_id, clip_denoised: bool):
+        x_recon = self.predict_start_from_noise(x, t=t, noise=self.denoise_fn(x, t, class_id))
 
         if clip_denoised:
             x_recon.clamp_(-1.0, 1.0)
@@ -156,10 +147,10 @@ class GaussianDiffusion(nn.Module):
         return model_mean, posterior_variance, posterior_log_variance
 
     @torch.no_grad()
-    def p_sample(self, x, t, clip_denoised=True, repeat_noise=False):
+    def p_sample(self, x, t, class_id=None, clip_denoised=True, repeat_noise=False):
         b, *_, device = *x.shape, x.device
         model_mean, _, model_log_variance = self.p_mean_variance(
-            x=x, t=t, clip_denoised=clip_denoised
+            x=x, t=t, class_id=class_id, clip_denoised=clip_denoised
         )
         noise = noise_like(x.shape, device, repeat_noise)
         # no noise when t == 0
@@ -167,7 +158,7 @@ class GaussianDiffusion(nn.Module):
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
 
     @torch.no_grad()
-    def p_sample_loop(self, shape):
+    def p_sample_loop(self, shape, class_id):
         device = self.betas.device
 
         b = shape[0]
@@ -179,7 +170,9 @@ class GaussianDiffusion(nn.Module):
             total=self.num_timesteps,
         ):
             img = self.p_sample(
-                img, torch.full((b,), i, device=device, dtype=torch.long)
+                img,
+                torch.full((b,), i, device=device, dtype=torch.long),
+                class_id
             )
         return img
 
@@ -217,12 +210,12 @@ class GaussianDiffusion(nn.Module):
             + extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
         )
 
-    def p_losses(self, x_start, t, noise=None):
+    def p_losses(self, x_start, t, class_embed=None, noise=None):
         b, c, h, w = x_start.shape
         noise = default(noise, lambda: torch.randn_like(x_start))
 
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
-        x_recon = self.denoise_fn(x_noisy, t)
+        x_recon = self.denoise_fn(x_noisy, t, class_embed)
 
         if self.loss_type == "l1":
             loss = (noise - x_recon).abs().mean()
@@ -243,4 +236,5 @@ class GaussianDiffusion(nn.Module):
             h == img_size and w == img_size
         ), f"height and width of image must be {img_size}"
         t = torch.randint(0, self.num_timesteps, (b,), device=device).long()
+
         return self.p_losses(x, t, *args, **kwargs)

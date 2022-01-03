@@ -2,34 +2,26 @@ from torch import nn
 import torch
 
 from model.modules.embeddings import FourierFeatures
-from model.modules.residual_layers import ResLinearBlock
 from model.modules.unet_layers import UNetLayer
 
 
 class UNet(nn.Module):
     def __init__(
-        self, in_channels=3, out_channels=3, base_hidden_channel=128, n_layers=4
+        self, in_channels=3, out_channels=3, base_hidden_channel=128, n_layers=4,
+            chan_multiplier=[], inner_layers=[], attention_layers=[],
     ):
         super().__init__()
         self.input_projection = UNetLayer(
             in_channels, base_hidden_channel, inner_layers=3, downsample=False
         )
 
-        channel_numbers = [
-            base_hidden_channel,
-            base_hidden_channel * 2,
-            base_hidden_channel * 2,
-            base_hidden_channel * 4,
-        ]
-        inner_layers = [3, 4, 4, 6]
-        attention_layers = [False, False, False, True]
         down_layers = []
         up_layers = []
 
         for level in range(n_layers - 1):
             layer = UNetLayer(
-                channel_numbers[level],
-                channel_numbers[level + 1],
+                base_hidden_channel * chan_multiplier[level],
+                base_hidden_channel * chan_multiplier[level + 1],
                 inner_layers=inner_layers[level],
                 attention=attention_layers[level],
                 downsample=level > 0,
@@ -38,8 +30,8 @@ class UNet(nn.Module):
 
         for level in reversed(range(n_layers - 1)):
             layer = UNetLayer(
-                channel_numbers[level + 1] * 2,
-                channel_numbers[level],
+                base_hidden_channel * chan_multiplier[level + 1] * 2,
+                base_hidden_channel * chan_multiplier[level],
                 inner_layers=inner_layers[level],
                 attention=attention_layers[level],
                 upsample=level > 0,
@@ -50,7 +42,7 @@ class UNet(nn.Module):
         self.up = nn.ModuleList(up_layers)
 
         self.output_projection = UNetLayer(
-            channel_numbers[0],
+            base_hidden_channel * chan_multiplier[0],
             out_channels,
             inner_layers=3,
             upsample=False,
@@ -83,22 +75,37 @@ class DiffusionModel(nn.Module):
     def __init__(
         self,
         timestep_embed=16,
-        in_channels=3,
-        out_channels=3,
-        base_hidden_channel=128,
-        n_layers=4,
+        num_classes=10,
+        in_channels=1,
+        out_channels=1,
+        base_hidden_channels=32,
+        n_layers=2,
+        chan_multiplier=[],
+        inner_layers=[],
+        attention_layers=[]
     ):
         super().__init__()
         self.timestep_embed = FourierFeatures(1, timestep_embed)
+        if num_classes > 0:
+            self.class_embed = nn.Embedding(num_classes, timestep_embed)
+        else:
+            self.class_embed = None
+
         self.unet = UNet(
             in_channels=in_channels + timestep_embed,
             out_channels=out_channels,
-            base_hidden_channel=base_hidden_channel,
+            base_hidden_channel=base_hidden_channels,
             n_layers=n_layers,
+            chan_multiplier=chan_multiplier,
+            inner_layers=inner_layers,
+            attention_layers=attention_layers,
         )
 
-    def forward(self, x, t):
+    def forward(self, x, t, class_id=None):
         timestep_embed = expand_to_planes(self.timestep_embed(t[:, None]), x.shape)
+        if self.class_embed is not None:
+            class_embed = expand_to_planes(self.class_embed(class_id), x.shape)
+            timestep_embed = timestep_embed + class_embed
         x = torch.cat([x, timestep_embed], dim=1)
         x = self.unet(x)
         return x
