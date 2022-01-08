@@ -73,11 +73,13 @@ def train(config_path, name, epochs, resume_from):
 
 def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer):
     pbar = tqdm.tqdm(dataloader)
-    for image, class_id in pbar:
+    for image, _ in pbar:
         image = image.to(device)
-        class_id = class_id.to(device)
+
         opt.zero_grad()
-        loss = diffusion(image, class_id)
+
+        loss = diffusion(image)
+
         tb_writer.add_scalar("loss", loss.item(), step)
         loss.backward()
         opt.step()

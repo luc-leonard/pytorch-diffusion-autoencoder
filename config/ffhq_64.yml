@@ -7,22 +7,21 @@ model:
     in_channels: 3
     out_channels: 3
     base_hidden_channels: 128
-    n_layers: 4
-    chan_multiplier: [1, 2, 2, 4]
-    inner_layers: [3, 3, 4, 5]
-    attention_layers: [False, False, False, True]
+    n_layers: 2
+    chan_multiplier: [1, 2]
+    inner_layers: [3, 4]
+    attention_layers: [False, True]
 
 diffusion:
   target: model.diffusion.GaussianDiffusion
   params:
-    image_size: 256
+    image_size: 64
 
 training:
   learning_rate: 3e-4
-  batch_size: 4
+  batch_size: 64
 
 data:
   target: data.ffhq.FFHQDataset
   params:
-    root: /media/lleonard/big_slow_disk/datasets/ffhq/
-    resize: 256
+    root: ./dataset/ffhq-128

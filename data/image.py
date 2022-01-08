@@ -12,7 +12,7 @@ import torchaudio
 class MyImageFolderDataset(Dataset):
     def __init__(
         self,
-        data_dir,
+        root,
         extensions=[".jpg", ".jpeg", ".png"],
         crop_size=None,
         resize=None,
@@ -20,8 +20,8 @@ class MyImageFolderDataset(Dataset):
     ):
         self.files = []
         for extension in extensions:
-            self.files.extend(glob.glob(data_dir + "/**/*" + extension))
-            self.files.extend(glob.glob(data_dir + "/*" + extension))
+            self.files.extend(glob.glob(root + "/**/*" + extension))
+            self.files.extend(glob.glob(root + "/*" + extension))
         if resize is not None:
             rescaler = albumentations.SmallestMaxSize(max_size=resize)
         else:
@@ -41,27 +41,10 @@ class MyImageFolderDataset(Dataset):
             image = np.array(image).astype(np.uint8)
             image = self.transform(image=image)["image"]
             image = (image / 127.5 - 1.0).astype(np.float32)
-            return torch.tensor(image).permute(2, 0, 1), torch.tensor(0)
-        except Exception as e:
-            print(e)
-            print(traceback.format_exc())
-
-
-class SoundDataset(Dataset):
-    def __init__(self, data_dir, extensions=[".wav"], **ignored):
-        self.files = []
-        for extension in extensions:
-            self.files.extend(glob.glob(data_dir + "/**/*" + extension))
-            self.files.extend(glob.glob(data_dir + "/*" + extension))
-
-    def __len__(self):
-        return len(self.files)
-
-    def __getitem__(self, index):
-        try:
-            waveform, samplerate = torchaudio.load(self.files[index])
-
-            return waveform, torch.tensor(0)
+            return {
+                "image": torch.tensor(image).permute(2, 0, 1),
+                "path": self.files[index]
+            }
         except Exception as e:
             print(e)
             print(traceback.format_exc())

@@ -1,6 +1,7 @@
 from torch import nn
 import torch
 
+from model.latent_encoder import LatentEncoder
 from model.modules.embeddings import FourierFeatures
 from model.modules.unet_layers import UNetLayer
 
@@ -75,6 +76,43 @@ class DiffusionModel(nn.Module):
     def __init__(
         self,
         timestep_embed=16,
+        size=None,
+        in_channels=1,
+        out_channels=1,
+        base_hidden_channels=32,
+        n_layers=2,
+        chan_multiplier=[],
+        inner_layers=[],
+        attention_layers=[],
+    ):
+        super().__init__()
+        self.size = size
+        self.in_channel = in_channels
+
+        self.timestep_embed = FourierFeatures(1, timestep_embed)
+
+        self.unet = UNet(
+            in_channels=in_channels + timestep_embed,
+            out_channels=out_channels,
+            base_hidden_channel=base_hidden_channels,
+            n_layers=n_layers,
+            chan_multiplier=chan_multiplier,
+            inner_layers=inner_layers,
+            attention_layers=attention_layers,
+        )
+
+    def forward(self, x, t):
+        timestep_embed = expand_to_planes(self.timestep_embed(t[:, None]), x.shape)
+        x = torch.cat([x, timestep_embed], dim=1)
+        x = self.unet(x)
+        return x
+
+
+class ClassConditionedDiffusionModel(nn.Module):
+    def __init__(
+        self,
+        timestep_embed=16,
+        size=None,
         num_classes=10,
         in_channels=1,
         out_channels=1,
@@ -82,9 +120,12 @@ class DiffusionModel(nn.Module):
         n_layers=2,
         chan_multiplier=[],
         inner_layers=[],
-        attention_layers=[]
+        attention_layers=[],
     ):
         super().__init__()
+        self.size = size
+        self.in_channel = in_channels
+
         self.timestep_embed = FourierFeatures(1, timestep_embed)
         if num_classes > 0:
             self.class_embed = nn.Embedding(num_classes, timestep_embed)
@@ -106,6 +147,78 @@ class DiffusionModel(nn.Module):
         if self.class_embed is not None:
             class_embed = expand_to_planes(self.class_embed(class_id), x.shape)
             timestep_embed = timestep_embed + class_embed
+        x = torch.cat([x, timestep_embed], dim=1)
+        x = self.unet(x)
+        return x
+
+
+class AutoEncoderDiffusionModel(nn.Module):
+    def __init__(
+        self,
+        timestep_embed=16,
+        size=None,
+        in_channels=1,
+        out_channels=1,
+        base_hidden_channels=32,
+        n_layers=2,
+        chan_multiplier=[],
+        inner_layers=[],
+        attention_layers=[],
+    ):
+        super().__init__()
+        self.size = size
+        self.in_channel = in_channels
+        self.timestep_embed = FourierFeatures(1, timestep_embed)
+
+        self.unet = UNet(
+            in_channels=in_channels + timestep_embed,
+            out_channels=out_channels,
+            base_hidden_channel=base_hidden_channels,
+            n_layers=n_layers,
+            chan_multiplier=chan_multiplier,
+            inner_layers=inner_layers,
+            attention_layers=attention_layers,
+        )
+
+    def forward(self, x, t, latent):
+        timestep_embed = expand_to_planes(self.timestep_embed(t[:, None]), x.shape)
+
+        x = torch.cat([x, timestep_embed], dim=1)
+        x = self.unet(x)
+        return x
+
+
+class PatchAutoEncoderDiffusionModel(nn.Module):
+    def __init__(
+        self,
+        timestep_embed=16,
+        size=None,
+        in_channels=1,
+        out_channels=1,
+        base_hidden_channels=32,
+        n_layers=2,
+        chan_multiplier=[],
+        inner_layers=[],
+        attention_layers=[],
+    ):
+        super().__init__()
+        self.size = size
+        self.in_channel = in_channels
+        self.timestep_embed = FourierFeatures(1, timestep_embed)
+
+        self.unet = UNet(
+            in_channels=in_channels + timestep_embed,
+            out_channels=out_channels,
+            base_hidden_channel=base_hidden_channels,
+            n_layers=n_layers,
+            chan_multiplier=chan_multiplier,
+            inner_layers=inner_layers,
+            attention_layers=attention_layers,
+        )
+
+    def forward(self, x, t, position_embed, latent):
+        timestep_embed = expand_to_planes(self.timestep_embed(t[:, None]), x.shape)
+
         x = torch.cat([x, timestep_embed], dim=1)
         x = self.unet(x)
         return x

@@ -11,10 +11,8 @@ model:
     chan_multiplier: [1, 2]
     inner_layers: [2, 2]
     attention_layers: [False, True]
-
-
 diffusion:
-  target: model.diffusion.ClassConditionedGaussianDiffusion
+  target: model.diffusion.AutoEncoderGaussianDiffusion
   params:
     image_size: 28
     timesteps: 1000
