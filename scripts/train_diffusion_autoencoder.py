@@ -3,15 +3,10 @@ from pathlib import Path
 import click
 import omegaconf
 import torch
-import numpy as np
 import torchvision.datasets
-from torchvision.transforms import ToTensor
-
-from data.image import MyImageFolderDataset
-from model.diffusion import GaussianDiffusion
-from model.unet import UNet, DiffusionModel
 import tqdm
 from torch.utils.tensorboard import SummaryWriter
+from torchvision.transforms import ToTensor
 
 from utils.config import get_class_from_str
 

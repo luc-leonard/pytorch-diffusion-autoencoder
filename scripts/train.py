@@ -80,7 +80,7 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, training_
         opt.step()
         pbar.set_description(f"{step}: {loss.item():.4f}")
         if step % 1000 == 0:
-            sample(diffusion, model, step, training_config.conditional, tb_writer)
+            sample(diffusion, model, step, training_config.conditional, class_id[0], tb_writer)
             tb_writer.add_image("real_image", (image[0] + 1) / 2, step)
             torch.save({
                 'model_state_dict': diffusion.state_dict(),
@@ -92,12 +92,11 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, training_
     return step
 
 
-def sample(diffusion, model, step, conditional, tb_writer):
+def sample(diffusion, model, step, conditional, class_id, tb_writer):
 
     model.eval()
     if conditional:
-        classes = torch.randint(0, diffusion.n_classes, [1]).to(device)
-        generated = diffusion.p_sample_loop((1, model.in_channels, *model.size), classes)
+        generated = diffusion.p_sample_loop((1, model.in_channels, *model.size), class_id=class_id[None])
     else:
         generated = diffusion.p_sample_loop((1, model.in_channels, *model.size))
     generated = (generated + 1) / 2
@@ -108,7 +107,7 @@ def sample(diffusion, model, step, conditional, tb_writer):
 @click.command()
 @click.option('--config', '-c')
 @click.option('--name', '-n')
-@click.option('--epochs', '-e', default=10)
+@click.option('--epochs', '-e', default=500)
 @click.option('--resume-from', '-r', default=None)
 def main(config: str, name: str, resume_from: str, epochs: int):
     train(config, name, epochs, resume_from)
