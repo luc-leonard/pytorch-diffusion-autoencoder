@@ -82,39 +82,3 @@ class UNet(nn.Module):
 
         x = self.output_projection(self.embed_with(x, timestep_embed, additional_embed))
         return x
-
-
-
-class DiffusionModel(nn.Module):
-    def __init__(
-        self,
-        timestep_embed=16,
-        size=None,
-        in_channels=1,
-        out_channels=1,
-        base_hidden_channels=32,
-        n_layers=2,
-        chan_multiplier=[],
-        inner_layers=[],
-        attention_layers=[],
-        z_dim=1,
-    ):
-        super().__init__()
-        self.size = size
-        self.in_channel = in_channels
-
-        self.unet = UNet(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            base_hidden_channels=base_hidden_channels,
-            n_layers=n_layers,
-            chan_multiplier=chan_multiplier,
-            inner_layers=inner_layers,
-            attention_layers=attention_layers,
-            z_dim=z_dim,
-            timestep_embed=timestep_embed
-        )
-
-    def forward(self, x, t, z):
-        x = self.unet(x, t, z)
-        return x
