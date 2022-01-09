@@ -99,7 +99,7 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
 
 def sample(diffusion, model, step, x, tb_writer):
     model.eval()
-    generated, latent = diffusion.p_sample_loop((1, model.in_channel, *model.size), x)
+    generated, latent = diffusion.p_sample_loop((1, model.in_channels, *model.size), x)
     generated = (generated + 1) / 2
     model.train()
     tb_writer.add_image("train/image", torchvision.utils.make_grid(generated, nrow=3), step)

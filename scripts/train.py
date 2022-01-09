@@ -38,10 +38,9 @@ def train(config_path, name, epochs, resume_from):
     config = omegaconf.OmegaConf.load(config_path)
 
     tb_writer = SummaryWriter(run_path)
-    model = DiffusionModel(**config.model.params)
-    model.to(device)
-    print(model)
-    diffusion = GaussianDiffusion(model, **config.diffusion.params).to(device)
+    model = get_class_from_str(config.model.target)(**config.model.params).to(device)
+    diffusion = get_class_from_str(config.diffusion.target)(model, **config.diffusion.params).to(device)
+
     opt = torch.optim.AdamW(diffusion.parameters(), lr=config.training.learning_rate)
     step = 0
     if resume_from is not None:
@@ -98,7 +97,7 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
 def sample(diffusion, model, step, tb_writer):
     classes = torch.randint(0, 2, [1]).to(device)
     model.eval()
-    generated = diffusion.p_sample_loop((1, model.in_channel, *model.size), classes)
+    generated = diffusion.p_sample_loop((1, model.in_channels, *model.size), classes)
     generated = (generated + 1) / 2
     model.train()
     tb_writer.add_image("image", torchvision.utils.make_grid(generated, nrow=3), step)

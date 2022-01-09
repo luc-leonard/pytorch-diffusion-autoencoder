@@ -39,8 +39,12 @@ def noise_like(shape, device, repeat=False):
 
 
 class ClassConditionedGaussianDiffusion(GaussianDiffusion):
+    def __init__(self, *args,n_classes=1, z_dim=1, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.class_embed = nn.Embedding(n_classes, z_dim)
+
     def p_mean_variance(self, x, t, clip_denoised: bool, class_id=None):
-        x_recon = self.predict_start_from_noise(x, t=t, noise=self.denoise_fn(x, t, class_id))
+        x_recon = self.predict_start_from_noise(x, t=t, noise=self.denoise_fn(x, t, self.class_embed(class_id)))
 
         if clip_denoised:
             x_recon.clamp_(-1., 1.)
@@ -72,7 +76,7 @@ class ClassConditionedGaussianDiffusion(GaussianDiffusion):
         noise = default(noise, lambda: torch.randn_like(x_start))
 
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
-        x_recon = self.denoise_fn(x_noisy, t, class_id)
+        x_recon = self.denoise_fn(x_noisy, t, self.class_embed(class_id))
 
         if self.loss_type == "l1":
             loss = (noise - x_recon).abs().mean()
