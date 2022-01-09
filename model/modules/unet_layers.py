@@ -39,7 +39,6 @@ class UNetLayer(nn.Module):
                 layers.append(SelfAttention2d(c_out, c_out // 64))
 
         if upsample:
-            assert downsample is False
             layers.append(
                 nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False)
             )
