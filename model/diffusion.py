@@ -41,6 +41,7 @@ def noise_like(shape, device, repeat=False):
 class ClassConditionedGaussianDiffusion(GaussianDiffusion):
     def __init__(self, *args,n_classes=1, z_dim=1, **kwargs):
         super().__init__(*args, **kwargs)
+        self.n_classes = n_classes
         self.class_embed = nn.Embedding(n_classes, z_dim)
 
     def p_mean_variance(self, x, t, clip_denoised: bool, class_id=None):

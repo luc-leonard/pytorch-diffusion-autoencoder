@@ -65,7 +65,8 @@ class UNet(nn.Module):
 
     def embed_with(self, x, *embeddings):
         for e in embeddings:
-            x = torch.cat([x, expand_to_planes(e, x.shape)], dim=1)
+            if e is not None:
+                x = torch.cat([x, expand_to_planes(e, x.shape)], dim=1)
         return x
 
     def forward(self, x, timestep, additional_embed=None):

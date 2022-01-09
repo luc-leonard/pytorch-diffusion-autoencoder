@@ -24,6 +24,7 @@ diffusion:
 training:
   learning_rate: 1e-4
   batch_size: 256
+  conditional: True
 
 data:
   target: torchvision.datasets.MNIST

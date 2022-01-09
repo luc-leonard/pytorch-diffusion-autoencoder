@@ -55,7 +55,7 @@ def train(config_path, name, epochs, resume_from):
     print('training')
     for epoch in range(epochs):
         tb_writer.add_scalar('epoch', epoch, step)
-        step = do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer)
+        step = do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, config.training, tb_writer)
 
         torch.save({
             'model_state_dict': diffusion.state_dict(),
@@ -65,19 +65,22 @@ def train(config_path, name, epochs, resume_from):
         }, Path(run_path) / f'diffusion_{step}.pt')
 
 
-def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer):
+def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, training_config, tb_writer):
     pbar = tqdm.tqdm(dataloader)
     for image, class_id in pbar:
         image = image.to(device)
         class_id = class_id.to(device)
         opt.zero_grad()
-        loss = diffusion(image, class_id)
+        if training_config.conditional:
+            loss = diffusion(image, class_id)
+        else:
+            loss = diffusion(image)
         tb_writer.add_scalar("loss", loss.item(), step)
         loss.backward()
         opt.step()
         pbar.set_description(f"{step}: {loss.item():.4f}")
         if step % 1000 == 0:
-            sample(diffusion, model, step, tb_writer)
+            sample(diffusion, model, step, training_config.conditional, tb_writer)
             tb_writer.add_image("real_image", (image[0] + 1) / 2, step)
             torch.save({
                 'model_state_dict': diffusion.state_dict(),
@@ -89,10 +92,14 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
     return step
 
 
-def sample(diffusion, model, step, tb_writer):
-    classes = torch.randint(0, 2, [1]).to(device)
+def sample(diffusion, model, step, conditional, tb_writer):
+
     model.eval()
-    generated = diffusion.p_sample_loop((1, model.in_channels, *model.size), classes)
+    if conditional:
+        classes = torch.randint(0, diffusion.n_classes, [1]).to(device)
+        generated = diffusion.p_sample_loop((1, model.in_channels, *model.size), classes)
+    else:
+        generated = diffusion.p_sample_loop((1, model.in_channels, *model.size))
     generated = (generated + 1) / 2
     model.train()
     tb_writer.add_image("image", torchvision.utils.make_grid(generated, nrow=3), step)
