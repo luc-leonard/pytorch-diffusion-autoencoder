@@ -1,5 +1,5 @@
 model:
-  target: model.unet.DiffusionModel
+  target: model.unet.ClassConditionedDiffusionModel
   params:
     timestep_embed: 16
     size: [28, 28]

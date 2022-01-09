@@ -39,12 +39,40 @@ def noise_like(shape, device, repeat=False):
 
 
 class ClassConditionedGaussianDiffusion(GaussianDiffusion):
-    def p_losses(self, x_start, t, class_embed=None, noise=None):
+    def p_mean_variance(self, x, t, clip_denoised: bool, class_id=None):
+        x_recon = self.predict_start_from_noise(x, t=t, noise=self.denoise_fn(x, t, class_id))
+
+        if clip_denoised:
+            x_recon.clamp_(-1., 1.)
+
+        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x, t=t)
+        return model_mean, posterior_variance, posterior_log_variance
+
+    @torch.no_grad()
+    def p_sample(self, x, t, clip_denoised=True, repeat_noise=False, class_id=None):
+        b, *_, device = *x.shape, x.device
+        model_mean, _, model_log_variance = self.p_mean_variance(x=x, t=t, clip_denoised=clip_denoised, class_id=class_id)
+        noise = noise_like(x.shape, device, repeat_noise)
+        # no noise when t == 0
+        nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
+        return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
+
+    @torch.no_grad()
+    def p_sample_loop(self, shape, class_id):
+        device = self.betas.device
+        b = shape[0]
+        img = torch.randn(shape, device=device)
+
+        for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
+            img = self.p_sample(img, torch.full((b,), i, device=device, dtype=torch.long), class_id=class_id)
+        return img
+
+    def p_losses(self, x_start, t, class_id=None, noise=None):
         b, c, h, w = x_start.shape
         noise = default(noise, lambda: torch.randn_like(x_start))
 
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
-        x_recon = self.denoise_fn(x_noisy, t, class_embed)
+        x_recon = self.denoise_fn(x_noisy, t, class_id)
 
         if self.loss_type == "l1":
             loss = (noise - x_recon).abs().mean()
@@ -57,11 +85,40 @@ class ClassConditionedGaussianDiffusion(GaussianDiffusion):
 
 
 class AutoEncoderGaussianDiffusion(GaussianDiffusion):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, encoder_params, **kwargs):
         super().__init__(*args, **kwargs)
-        self.latent_encoder = LatentEncoder()
+        self.latent_encoder = LatentEncoder(**encoder_params)
 
-    def p_losses(self, x_start, t, class_embed=None, noise=None):
+    def p_mean_variance(self, x, t, clip_denoised: bool, latent=None):
+        x_recon = self.predict_start_from_noise(x, t=t, noise=self.denoise_fn(x, t, latent))
+
+        if clip_denoised:
+            x_recon.clamp_(-1., 1.)
+
+        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x, t=t)
+        return model_mean, posterior_variance, posterior_log_variance
+
+    @torch.no_grad()
+    def p_sample(self, x, t, clip_denoised=True, repeat_noise=False, latent=None):
+        b, *_, device = *x.shape, x.device
+        model_mean, _, model_log_variance = self.p_mean_variance(x=x, t=t, clip_denoised=clip_denoised, latent=latent)
+        noise = noise_like(x.shape, device, repeat_noise)
+        # no noise when t == 0
+        nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
+        return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
+
+    @torch.no_grad()
+    def p_sample_loop(self, shape, x):
+        device = self.betas.device
+        b = shape[0]
+        img = torch.randn(shape, device=device)
+        latent = self.latent_encoder(x.unsqueeze(0))
+        print('latent', latent.shape)
+        for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
+            img = self.p_sample(img, torch.full((b,), i, device=device, dtype=torch.long), latent=latent)
+        return img
+
+    def p_losses(self, x_start, t, class_id=None, noise=None):
         b, c, h, w = x_start.shape
         noise = default(noise, lambda: torch.randn_like(x_start))
 

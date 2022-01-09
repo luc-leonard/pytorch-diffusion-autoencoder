@@ -9,9 +9,12 @@ from model.modules.unet_layers import UNetLayer
 class UNet(nn.Module):
     def __init__(
         self, in_channels=3, out_channels=3, base_hidden_channel=128, n_layers=4,
+            timestep_embed=16,
             chan_multiplier=[], inner_layers=[], attention_layers=[],
     ):
         super().__init__()
+        self.timestep_embed = FourierFeatures(1, timestep_embed)
+
         self.input_projection = UNetLayer(
             in_channels, base_hidden_channel, inner_layers=3, downsample=False
         )
@@ -66,6 +69,7 @@ class UNet(nn.Module):
 
         x = self.output_projection(x)
         return x
+
 
 
 def expand_to_planes(input, shape):
@@ -171,7 +175,7 @@ class AutoEncoderDiffusionModel(nn.Module):
         self.timestep_embed = FourierFeatures(1, timestep_embed)
 
         self.unet = UNet(
-            in_channels=in_channels + timestep_embed,
+            in_channels=in_channels + timestep_embed + 3,
             out_channels=out_channels,
             base_hidden_channel=base_hidden_channels,
             n_layers=n_layers,
@@ -183,7 +187,7 @@ class AutoEncoderDiffusionModel(nn.Module):
     def forward(self, x, t, latent):
         timestep_embed = expand_to_planes(self.timestep_embed(t[:, None]), x.shape)
 
-        x = torch.cat([x, timestep_embed], dim=1)
+        x = torch.cat([x, timestep_embed, latent], dim=1)
         x = self.unet(x)
         return x
 
