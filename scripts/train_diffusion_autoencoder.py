@@ -86,7 +86,7 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
         pbar.set_description(f"{step}: {loss.item():.4f}")
         if step % 500 == 0:
             sample(diffusion, model, step, image[0], tb_writer)
-            tb_writer.add_image("real_image", (image[0] + 1) / 2, step)
+            tb_writer.add_image("train/real_image", (image[0] + 1) / 2, step)
             torch.save({
                 'model_state_dict': diffusion.state_dict(),
                 'optimizer_state_dict': opt.state_dict(),
@@ -99,16 +99,17 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
 
 def sample(diffusion, model, step, x, tb_writer):
     model.eval()
-    generated = diffusion.p_sample_loop((1, model.in_channel, *model.size), x)
+    generated, latent = diffusion.p_sample_loop((1, model.in_channel, *model.size), x)
     generated = (generated + 1) / 2
     model.train()
-    tb_writer.add_image("image", torchvision.utils.make_grid(generated, nrow=3), step)
+    tb_writer.add_image("train/image", torchvision.utils.make_grid(generated, nrow=3), step)
+   # tb_writer.add_image("train/latent", latent[0], step)
 
 
 @click.command()
 @click.option('--config', '-c')
 @click.option('--name', '-n')
-@click.option('--epochs', '-e', default=10)
+@click.option('--epochs', '-e', default=500)
 @click.option('--resume-from', '-r', default=None)
 def main(config: str, name: str, resume_from: str, epochs: int):
     train(config, name, epochs, resume_from)

@@ -10,6 +10,7 @@ model:
     chan_multiplier: [1, 2]
     inner_layers: [2, 2]
     attention_layers: [False, True]
+    z_dim: 128
 
 diffusion:
   target: model.diffusion.AutoEncoderGaussianDiffusion
@@ -20,11 +21,11 @@ diffusion:
       in_channels: 1
       out_channels: 1
       base_hidden_channels: 32
-      n_layers: 2
-      chan_multiplier: [ 1, 2 ]
-      inner_layers: [ 2, 2 ]
-      attention_layers: [ False, True ]
-      z_channels: 3
+      n_layers: 4
+      chan_multiplier: [ 1,2,2, 4]
+      inner_layers: [ 1,2,2, 4]
+      attention_layers: [ False, False , True, True]
+      z_dim: 128
 
 training:
   learning_rate: 1e-4
