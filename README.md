@@ -3,7 +3,7 @@ WIP: Unofficial implementation of diffusion autoencoders, using pytorch (https:/
 
 Special thanks for https://github.com/lucidrains/denoising-diffusion-pytorch
 
-![sample]('./sample/sample_1.png')
+![sample](./sample/sample_1.png)
 # Usage
 
 ```
