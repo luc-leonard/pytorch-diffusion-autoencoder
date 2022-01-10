@@ -24,6 +24,7 @@ model = Unet(
         z_dim=128,
 )
 
+# almost same as the model. z_dim MUST be equals.
 encoder = LatentEncoder(
       in_channels = 1
       out_channels = 1
