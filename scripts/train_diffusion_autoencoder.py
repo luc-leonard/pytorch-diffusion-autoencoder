@@ -13,21 +13,6 @@ from utils.config import get_class_from_str
 device = "cuda"
 
 
-class DatasetWrapper(torch.utils.data.Dataset):
-    def __init__(self, dataset):
-        self.dataset = dataset
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, index):
-        x = self.dataset[index]
-        image = x[0]
-        if not isinstance(image, torch.Tensor):
-            image = ToTensor()(image)
-        return image, x[1]
-
-
 def train(config_path, name, epochs, resume_from):
     run_path = f"runs/{name}"
     config = omegaconf.OmegaConf.load(config_path)
@@ -51,20 +36,26 @@ def train(config_path, name, epochs, resume_from):
         g["lr"] = config.training.learning_rate
 
     print("creating dataset")
-    dataset = DatasetWrapper(
-        get_class_from_str(config.data.target)(**config.data.params)
-    )
+    full_dataset = get_class_from_str(config.data.target)(**config.data.params)
+    train_size = int(0.8 * len(full_dataset))
+    test_size = len(full_dataset) - train_size
+    train_dataset, valid_dataset = torch.utils.data.random_split(full_dataset, [train_size, test_size])
 
-    dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=config.training.batch_size, shuffle=True, num_workers=4
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=config.training.batch_size, shuffle=True, num_workers=4
     )
+    valid_dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=config.training.batch_size, shuffle=True, num_workers=4)
     print("training")
     for epoch in range(epochs):
         tb_writer.add_scalar("epoch", epoch, step)
-        step = do_epoch(
-            dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
+        new_step = do_epoch(
+            train_dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
         )
-
+        print(f"epoch {epoch} done")
+        do_valid(
+            valid_dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
+        )
+        step = new_step
         torch.save(
             {
                 "model_state_dict": diffusion.state_dict(),
@@ -75,6 +66,17 @@ def train(config_path, name, epochs, resume_from):
             Path(run_path) / f"diffusion_{step}.pt",
         )
 
+@torch.no_grad()
+def do_valid(dataloader, diffusion, model, step, tb_writer):
+    model.eval()
+    pbar = tqdm.tqdm(dataloader)
+    for image, _ in pbar:
+        image = image.to(device)
+        with torch.no_grad():
+            loss = diffusion(image)
+        tb_writer.add_scalar("valid/loss", loss.item(), step)
+        pbar.set_description(f"{step}: {loss.item():.4f}")
+        step = step + 1
 
 def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer):
     pbar = tqdm.tqdm(dataloader)
@@ -85,7 +87,7 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
 
         loss = diffusion(image)
 
-        tb_writer.add_scalar("loss", loss.item(), step)
+        tb_writer.add_scalar("train/loss", loss.item(), step)
         loss.backward()
         opt.step()
         pbar.set_description(f"{step}: {loss.item():.4f}")

@@ -32,8 +32,6 @@ training:
   batch_size: 256
 
 data:
-  target: torchvision.datasets.MNIST
+  target: data.mnist.MNIST
   params:
-    train: True
-    download: True
     root: /media/lleonard/big_slow_disk/datasets/mnist
