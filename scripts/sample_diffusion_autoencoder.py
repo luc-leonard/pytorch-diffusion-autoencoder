@@ -18,16 +18,13 @@ import imageio
 @torch.no_grad()
 def show_interpolation(diffusion, model, x_1, x_2):
     print("Generating interpolation")
-    print(x_1.shape)
-    print(x_2.shape)
-    upsample = nn.Upsample(size=(model.size[0] * 3, model.size[1] * 3), mode="bilinear")
-    result, x_1_latent = diffusion.p_sample_loop((1, model.in_channels, *model.size), x_1[None])
-    _, x_2_latent = diffusion.p_sample_loop((1, model.in_channels, *model.size), x_2[None])
+    x_1_latent = diffusion.latent_encoder(x_1[None])
+    x_2_latent = diffusion.latent_encoder(x_2[None])
 
     interpolations = torch.stack([torch.lerp(x_1_latent, x_2_latent, t) for t in torch.linspace(0, 1, steps=100).to('cuda')]).squeeze(1)
     print(interpolations.shape)
     y_s = diffusion.p_decode_loop((100, model.in_channels, *model.size), interpolations.squeeze(1))
-    ys = torch.clamp(y_s, 0, 1)
+    y_s = torch.clamp(y_s, 0, 1)
     video = imageio.get_writer('interpolation.gif', fps=25)
     for y in y_s:
         y = ToPILImage()(y.cpu())

@@ -7,7 +7,8 @@ Special thanks for https://github.com/lucidrains/denoising-diffusion-pytorch
 ![sample](./sample/sample_1.png)
 
 ![sample](./sample/interpolation.gif)
-
+![sample](./sample/interpolation2.gif)
+![sample](./sample/interpolation3.gif)
 # Usage
 
 ```
