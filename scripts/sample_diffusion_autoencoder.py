@@ -28,8 +28,12 @@ def show_interpolation(diffusion, model, x_1, x_2):
     print(interpolations.shape)
     y_s = diffusion.p_decode_loop((100, model.in_channels, *model.size), interpolations.squeeze(1))
     ys = torch.clamp(y_s, 0, 1)
-    video = imageio.get_writer('interpolation.mp4', fps=25)
+    video = imageio.get_writer('interpolation.gif', fps=25)
     for y in y_s:
+        y = ToPILImage()(y.cpu())
+        y = y.resize((64, 64), LANCZOS)
+        video.append_data(np.array(y))
+    for y in reversed(y_s):
         y = ToPILImage()(y.cpu())
         y = y.resize((64, 64), LANCZOS)
         video.append_data(np.array(y))
