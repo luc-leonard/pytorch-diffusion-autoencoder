@@ -117,9 +117,6 @@ def sample(diffusion, model, step, x, stage, tb_writer):
     )
 
 
-# tb_writer.add_image("train/latent", latent[0], step)
-
-
 @click.command()
 @click.option("--config", "-c")
 @click.option("--name", "-n")
