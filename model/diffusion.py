@@ -148,6 +148,21 @@ class AutoEncoderGaussianDiffusion(GaussianDiffusion):
             )
         return img, latent
 
+    @torch.no_grad()
+    def p_decode_loop(self, shape, latent):
+        device = self.betas.device
+        b = shape[0]
+        img = torch.randn(shape, device=device)
+        for i in tqdm(
+            reversed(range(0, self.num_timesteps)),
+            desc="sampling loop time step",
+            total=self.num_timesteps,
+        ):
+            img = self.p_sample(
+                img, torch.full((b,), i, device=device, dtype=torch.long), latent=latent
+            )
+        return img
+
     def p_losses(self, x_start, t, class_id=None, noise=None):
         b, c, h, w = x_start.shape
         noise = default(noise, lambda: torch.randn_like(x_start))

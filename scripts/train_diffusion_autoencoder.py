@@ -25,12 +25,14 @@ def train(config_path, name, epochs, resume_from):
 
     opt = torch.optim.AdamW(diffusion.parameters(), lr=config.training.learning_rate)
     step = 0
+    base_epoch = 0
     if resume_from is not None:
         print(f"Resuming from {resume_from}")
         checkpoint = torch.load(resume_from)
         diffusion.load_state_dict(checkpoint["model_state_dict"], strict=False)
         opt.load_state_dict(checkpoint["optimizer_state_dict"])
         step = checkpoint["step"]
+        base_epoch = checkpoint["epoch"]
 
     for g in opt.param_groups:
         g["lr"] = config.training.learning_rate
@@ -47,10 +49,11 @@ def train(config_path, name, epochs, resume_from):
     valid_dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=config.training.batch_size, shuffle=True, num_workers=4)
     print("training")
     for epoch in range(epochs):
+        print(f"epoch {epoch + base_epoch} start")
         new_step = do_epoch(
-            train_dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer, config.training
+            train_dataloader, diffusion, epoch + base_epoch, model, opt, run_path, step, tb_writer, config.training
         )
-        print(f"epoch {epoch} done")
+        print(f"epoch {epoch + base_epoch} done")
         do_valid(valid_dataloader, diffusion, model, step, tb_writer)
         step = new_step
         torch.save(
@@ -110,7 +113,7 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
 
 def sample(diffusion, model, step, x, stage, tb_writer):
     model.eval()
-    generated, latent = diffusion.p_sample_loop((1, model.in_channels, *model.size), x)
+    generated, latent = diffusion.p_sample_loop((1, model.in_channels, *model.size), x[None])
     generated = (generated + 1) / 2
     model.train()
     tb_writer.add_image(

@@ -1,6 +1,11 @@
+import itertools
+
 import click
+import numpy as np
 import omegaconf
 import torch
+import tqdm
+from PIL.Image import LANCZOS
 from torch import nn
 from torchvision.transforms import ToPILImage
 
@@ -8,6 +13,29 @@ from torchvision.utils import make_grid
 
 from scripts.train import DatasetWrapper
 from utils.config import get_class_from_str
+import imageio
+
+@torch.no_grad()
+def show_interpolation(diffusion, model, x_1, x_2):
+    print("Generating interpolation")
+    print(x_1.shape)
+    print(x_2.shape)
+    upsample = nn.Upsample(size=(model.size[0] * 3, model.size[1] * 3), mode="bilinear")
+    result, x_1_latent = diffusion.p_sample_loop((1, model.in_channels, *model.size), x_1[None])
+    _, x_2_latent = diffusion.p_sample_loop((1, model.in_channels, *model.size), x_2[None])
+
+    interpolations = torch.stack([torch.lerp(x_1_latent, x_2_latent, t) for t in torch.linspace(0, 1, steps=100).to('cuda')]).squeeze(1)
+    print(interpolations.shape)
+    y_s = diffusion.p_decode_loop((100, model.in_channels, *model.size), interpolations.squeeze(1))
+    ys = torch.clamp(y_s, 0, 1)
+    video = imageio.get_writer('interpolation.mp4', fps=25)
+    for y in y_s:
+        y = ToPILImage()(y.cpu())
+        y = y.resize((64, 64), LANCZOS)
+        video.append_data(np.array(y))
+    video.close()
+
+
 
 
 @click.command()
@@ -16,40 +44,34 @@ from utils.config import get_class_from_str
 @click.option("--batch-size", "-b", type=int, default=1)
 @click.option("--checkpoint-path", "-p", type=str)
 @torch.no_grad()
-def sample(config_path, checkpoint_path, batch_size=1, device="cuda"):
+def sample(config_path, checkpoint_path, batch_size=1, device="cpu"):
     config = omegaconf.OmegaConf.load(config_path)
 
     model = get_class_from_str(config.model.target)(**config.model.params).to(device)
+    encoder = get_class_from_str(config.encoder.target)(**config.encoder.params).to(device)
     diffusion = get_class_from_str(config.diffusion.target)(
-        model, **config.diffusion.params
+        model, **config.diffusion.params, latent_encoder=encoder
     ).to(device)
     print(f"Resuming from {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path)
     diffusion.load_state_dict(checkpoint["model_state_dict"], strict=False)
 
     model.eval()
-    # classes = torch.randint(0, 10, [batch_size]).to(device)
     dataset = DatasetWrapper(
         get_class_from_str(config.data.target)(**config.data.params)
     )
     dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=16, shuffle=True, num_workers=0
+        dataset, batch_size=2, shuffle=True, num_workers=0
     )
 
-    upsample = nn.Upsample(size=(model.size[0] * 3, model.size[1] * 3), mode="bilinear")
 
-    for x, _ in dataloader:
-        x = x.to(device)
-        x = x[0]
-        result, latent = diffusion.p_sample_loop((1, model.in_channels, *model.size), x)
-        print(result.shape)
-        print(x.shape)
-        print(latent.shape)
-        upsampled_x = upsample(x[None]).squeeze(0)
-        upsampled_result = upsample(result).squeeze(0)
-        ToPILImage()(upsampled_x.cpu()).show()
-        ToPILImage()(upsampled_result.cpu()).show()
-        break
+
+    mini_batch = next(iter(dataloader))
+    x_1 = mini_batch[0][0].to(device)
+    x_2 = mini_batch[0][1].to(device)
+
+    show_interpolation(diffusion, model, x_1, x_2)
+
 
 
 if __name__ == "__main__":
