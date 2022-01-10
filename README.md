@@ -40,7 +40,7 @@ diffusion = AutoEncoderGaussianDiffusion(
     image_size = 28,
     timesteps = 1000,   # number of steps
     loss_type = 'l1',    # L1 or L2
-    encoder = encoder,
+    latent_encoder = encoder,
 )
 
 training_images = torch.randn(8, 1, 28, 28)
