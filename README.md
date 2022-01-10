@@ -2,6 +2,8 @@
 WIP: Unofficial implementation of diffusion autoencoders, using pytorch (https://diff-ae.github.io/)
 
 Special thanks for https://github.com/lucidrains/denoising-diffusion-pytorch
+
+![sample]('./sample/sample_1.png')
 # Usage
 
 ```
