@@ -46,7 +46,6 @@ def train(config_path, name, epochs, resume_from):
     valid_dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=config.training.batch_size, shuffle=True, num_workers=4)
     print("training")
     for epoch in range(epochs):
-        tb_writer.add_scalar("epoch", epoch, step)
         new_step = do_epoch(
             train_dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer, config.training
         )
@@ -68,29 +67,26 @@ def train(config_path, name, epochs, resume_from):
 def do_valid(dataloader, diffusion, model, step, tb_writer):
     model.eval()
     pbar = tqdm.tqdm(dataloader)
-    sample_every = len(dataloader) // 10
     for image, _ in pbar:
         image = image.to(device)
         with torch.no_grad():
             loss = diffusion(image)
         tb_writer.add_scalar("valid/loss", loss.item(), step)
         pbar.set_description(f"{step}: {loss.item():.4f}")
-        if step % sample_every == 0:
-            sample(diffusion, model, step, image[0], 'valid', tb_writer)
-            tb_writer.add_image("valid/real_image", (image[0] + 1) / 2, step)
         step = step + 1
+    sample(diffusion, model, step, image[0], 'valid', tb_writer)
+    tb_writer.add_image("valid/real_image", (image[0] + 1) / 2, step)
 
 
 def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer, training_config):
     pbar = tqdm.tqdm(dataloader)
     for image, _ in pbar:
         image = image.to(device)
-
         opt.zero_grad()
 
         loss = diffusion(image)
-
         tb_writer.add_scalar("train/loss", loss.item(), step)
+        tb_writer.add_scalar("train/epoch", epoch, step)
         loss.backward()
         opt.step()
         pbar.set_description(f"{step}: {loss.item():.4f}")
