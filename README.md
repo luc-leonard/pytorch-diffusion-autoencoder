@@ -9,7 +9,19 @@ Special thanks for https://github.com/lucidrains/denoising-diffusion-pytorch
 ![sample](./sample/interpolation.gif)
 ![sample](./sample/interpolation2.gif)
 ![sample](./sample/interpolation3.gif)
+
+# Models
+
+mnist checkpoint: https://mega.nz/file/OQ90kLrI#eLlhmK6zgmvtyXduMJlEgUDD_dGctu7XD1H5w6b0CSw
+
 # Usage
+
+`python scripts/sample_diffusion_autoencoder.py \ 
+--checkpoint-path=$PATH_TO_PREVIOUSLY_DOWNLOADED_CHECKPOINT \
+--config-path =./config/mnist_256_small_ae.yml \`
+
+
+# Train your own
 
 ```
 import torch
