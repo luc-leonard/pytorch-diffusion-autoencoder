@@ -39,24 +39,30 @@ def noise_like(shape, device, repeat=False):
 
 
 class ClassConditionedGaussianDiffusion(GaussianDiffusion):
-    def __init__(self, *args,n_classes=1, z_dim=1, **kwargs):
+    def __init__(self, *args, n_classes=1, z_dim=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.n_classes = n_classes
         self.class_embed = nn.Embedding(n_classes, z_dim)
 
     def p_mean_variance(self, x, t, clip_denoised: bool, class_id=None):
-        x_recon = self.predict_start_from_noise(x, t=t, noise=self.denoise_fn(x, t, self.class_embed(class_id)))
+        x_recon = self.predict_start_from_noise(
+            x, t=t, noise=self.denoise_fn(x, t, self.class_embed(class_id))
+        )
 
         if clip_denoised:
-            x_recon.clamp_(-1., 1.)
+            x_recon.clamp_(-1.0, 1.0)
 
-        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x, t=t)
+        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(
+            x_start=x_recon, x_t=x, t=t
+        )
         return model_mean, posterior_variance, posterior_log_variance
 
     @torch.no_grad()
     def p_sample(self, x, t, clip_denoised=True, repeat_noise=False, class_id=None):
         b, *_, device = *x.shape, x.device
-        model_mean, _, model_log_variance = self.p_mean_variance(x=x, t=t, clip_denoised=clip_denoised, class_id=class_id)
+        model_mean, _, model_log_variance = self.p_mean_variance(
+            x=x, t=t, clip_denoised=clip_denoised, class_id=class_id
+        )
         noise = noise_like(x.shape, device, repeat_noise)
         # no noise when t == 0
         nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
@@ -68,8 +74,16 @@ class ClassConditionedGaussianDiffusion(GaussianDiffusion):
         b = shape[0]
         img = torch.randn(shape, device=device)
 
-        for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
-            img = self.p_sample(img, torch.full((b,), i, device=device, dtype=torch.long), class_id=class_id)
+        for i in tqdm(
+            reversed(range(0, self.num_timesteps)),
+            desc="sampling loop time step",
+            total=self.num_timesteps,
+        ):
+            img = self.p_sample(
+                img,
+                torch.full((b,), i, device=device, dtype=torch.long),
+                class_id=class_id,
+            )
         return img
 
     def p_losses(self, x_start, t, class_id=None, noise=None):
@@ -95,18 +109,24 @@ class AutoEncoderGaussianDiffusion(GaussianDiffusion):
         self.latent_encoder = LatentEncoder(**encoder_params)
 
     def p_mean_variance(self, x, t, clip_denoised: bool, latent=None):
-        x_recon = self.predict_start_from_noise(x, t=t, noise=self.denoise_fn(x, t, latent))
+        x_recon = self.predict_start_from_noise(
+            x, t=t, noise=self.denoise_fn(x, t, latent)
+        )
 
         if clip_denoised:
-            x_recon.clamp_(-1., 1.)
+            x_recon.clamp_(-1.0, 1.0)
 
-        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x, t=t)
+        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(
+            x_start=x_recon, x_t=x, t=t
+        )
         return model_mean, posterior_variance, posterior_log_variance
 
     @torch.no_grad()
     def p_sample(self, x, t, clip_denoised=True, repeat_noise=False, latent=None):
         b, *_, device = *x.shape, x.device
-        model_mean, _, model_log_variance = self.p_mean_variance(x=x, t=t, clip_denoised=clip_denoised, latent=latent)
+        model_mean, _, model_log_variance = self.p_mean_variance(
+            x=x, t=t, clip_denoised=clip_denoised, latent=latent
+        )
         noise = noise_like(x.shape, device, repeat_noise)
         # no noise when t == 0
         nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
@@ -118,10 +138,16 @@ class AutoEncoderGaussianDiffusion(GaussianDiffusion):
         b = shape[0]
         img = torch.randn(shape, device=device)
         latent = self.latent_encoder(x.unsqueeze(0))
-        print('sampling...')
-        print('latent', latent.shape)
-        for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
-            img = self.p_sample(img, torch.full((b,), i, device=device, dtype=torch.long), latent=latent)
+        print("sampling...")
+        print("latent", latent.shape)
+        for i in tqdm(
+            reversed(range(0, self.num_timesteps)),
+            desc="sampling loop time step",
+            total=self.num_timesteps,
+        ):
+            img = self.p_sample(
+                img, torch.full((b,), i, device=device, dtype=torch.long), latent=latent
+            )
         return img, latent
 
     def p_losses(self, x_start, t, class_id=None, noise=None):
@@ -149,7 +175,6 @@ class PatchAutoEncoderGaussianDiffusion(GaussianDiffusion):
 
     def p_losses(self, x_start, t, class_embed=None, noise=None):
         b, c, h, w = x_start.shape
-
 
         x_latent = self.latent_encoder(x_start)
         patch, position = self.patch_fn(x_start)

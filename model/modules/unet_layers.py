@@ -15,7 +15,7 @@ class UNetLayer(nn.Module):
         downsample: bool = False,
         upsample: bool = False,
         is_last=False,
-        embeddings_dim=None
+        embeddings_dim=None,
     ):
         super().__init__()
         layers = []

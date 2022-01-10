@@ -1,5 +1,6 @@
 def toTensor():
     ...
 
+
 def toImage():
     ...

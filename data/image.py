@@ -43,7 +43,7 @@ class MyImageFolderDataset(Dataset):
             image = (image / 127.5 - 1.0).astype(np.float32)
             return {
                 "image": torch.tensor(image).permute(2, 0, 1),
-                "path": self.files[index]
+                "path": self.files[index],
             }
         except Exception as e:
             print(e)

@@ -10,7 +10,7 @@ from torchvision.transforms import ToTensor
 
 from utils.config import get_class_from_str
 
-device = 'cuda'
+device = "cuda"
 
 
 class DatasetWrapper(torch.utils.data.Dataset):
@@ -34,35 +34,46 @@ def train(config_path, name, epochs, resume_from):
 
     tb_writer = SummaryWriter(run_path)
     model = get_class_from_str(config.model.target)(**config.model.params).to(device)
-    diffusion = get_class_from_str(config.diffusion.target)(model, **config.diffusion.params).to(device)
+    diffusion = get_class_from_str(config.diffusion.target)(
+        model, **config.diffusion.params
+    ).to(device)
 
     opt = torch.optim.AdamW(diffusion.parameters(), lr=config.training.learning_rate)
     step = 0
     if resume_from is not None:
         print(f"Resuming from {resume_from}")
         checkpoint = torch.load(resume_from)
-        diffusion.load_state_dict(checkpoint['model_state_dict'], strict=False)
-        opt.load_state_dict(checkpoint['optimizer_state_dict'])
-        step = checkpoint['step']
+        diffusion.load_state_dict(checkpoint["model_state_dict"], strict=False)
+        opt.load_state_dict(checkpoint["optimizer_state_dict"])
+        step = checkpoint["step"]
 
     for g in opt.param_groups:
-        g['lr'] = config.training.learning_rate
+        g["lr"] = config.training.learning_rate
 
-    print('creating dataset')
-    dataset = DatasetWrapper(get_class_from_str(config.data.target)(**config.data.params))
+    print("creating dataset")
+    dataset = DatasetWrapper(
+        get_class_from_str(config.data.target)(**config.data.params)
+    )
 
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.training.batch_size, shuffle=True, num_workers=4)
-    print('training')
+    dataloader = torch.utils.data.DataLoader(
+        dataset, batch_size=config.training.batch_size, shuffle=True, num_workers=4
+    )
+    print("training")
     for epoch in range(epochs):
-        tb_writer.add_scalar('epoch', epoch, step)
-        step = do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer)
+        tb_writer.add_scalar("epoch", epoch, step)
+        step = do_epoch(
+            dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
+        )
 
-        torch.save({
-            'model_state_dict': diffusion.state_dict(),
-            'optimizer_state_dict': opt.state_dict(),
-            'step': step,
-            'epoch': epoch
-        }, Path(run_path) / f'diffusion_{step}.pt')
+        torch.save(
+            {
+                "model_state_dict": diffusion.state_dict(),
+                "optimizer_state_dict": opt.state_dict(),
+                "step": step,
+                "epoch": epoch,
+            },
+            Path(run_path) / f"diffusion_{step}.pt",
+        )
 
 
 def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer):
@@ -74,7 +85,6 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
 
         loss = diffusion(image)
 
-
         tb_writer.add_scalar("loss", loss.item(), step)
         loss.backward()
         opt.step()
@@ -82,12 +92,15 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
         if step % 500 == 0:
             sample(diffusion, model, step, image[0], tb_writer)
             tb_writer.add_image("train/real_image", (image[0] + 1) / 2, step)
-            torch.save({
-                'model_state_dict': diffusion.state_dict(),
-                'optimizer_state_dict': opt.state_dict(),
-                'step': step,
-                'epoch': epoch
-            }, Path(run_path) / f'diffusion_{step}.pt')
+            torch.save(
+                {
+                    "model_state_dict": diffusion.state_dict(),
+                    "optimizer_state_dict": opt.state_dict(),
+                    "step": step,
+                    "epoch": epoch,
+                },
+                Path(run_path) / f"diffusion_{step}.pt",
+            )
         step = step + 1
     return step
 
@@ -97,15 +110,19 @@ def sample(diffusion, model, step, x, tb_writer):
     generated, latent = diffusion.p_sample_loop((1, model.in_channels, *model.size), x)
     generated = (generated + 1) / 2
     model.train()
-    tb_writer.add_image("train/image", torchvision.utils.make_grid(generated, nrow=3), step)
-   # tb_writer.add_image("train/latent", latent[0], step)
+    tb_writer.add_image(
+        "train/image", torchvision.utils.make_grid(generated, nrow=3), step
+    )
+
+
+# tb_writer.add_image("train/latent", latent[0], step)
 
 
 @click.command()
-@click.option('--config', '-c')
-@click.option('--name', '-n')
-@click.option('--epochs', '-e', default=500)
-@click.option('--resume-from', '-r', default=None)
+@click.option("--config", "-c")
+@click.option("--name", "-n")
+@click.option("--epochs", "-e", default=500)
+@click.option("--resume-from", "-r", default=None)
 def main(config: str, name: str, resume_from: str, epochs: int):
     train(config, name, epochs, resume_from)
 

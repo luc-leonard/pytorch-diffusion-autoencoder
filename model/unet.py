@@ -7,9 +7,17 @@ from model.modules.unet_layers import UNetLayer
 
 class UNet(nn.Module):
     def __init__(
-        self, in_channels=3, out_channels=3, base_hidden_channels=128, n_layers=4,
-            timestep_embed=16,
-            chan_multiplier=[], inner_layers=[], attention_layers=[], z_dim=1, size=None
+        self,
+        in_channels=3,
+        out_channels=3,
+        base_hidden_channels=128,
+        n_layers=4,
+        timestep_embed=16,
+        chan_multiplier=[],
+        inner_layers=[],
+        attention_layers=[],
+        z_dim=1,
+        size=None,
     ):
 
         super().__init__()
@@ -18,7 +26,10 @@ class UNet(nn.Module):
         self.timestep_embed = FourierFeatures(1, timestep_embed)
 
         self.input_projection = UNetLayer(
-            in_channels, base_hidden_channels, inner_layers=3, downsample=False,
+            in_channels,
+            base_hidden_channels,
+            inner_layers=3,
+            downsample=False,
             embeddings_dim=timestep_embed + z_dim,
         )
 

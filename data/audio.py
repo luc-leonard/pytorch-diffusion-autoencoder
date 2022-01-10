@@ -9,7 +9,7 @@ import torchaudio
 class WavDataset(Dataset):
     def __init__(self, root):
         self.folder = Path(root)
-        self.files = glob.glob(root / '*.wav')
+        self.files = glob.glob(root / "*.wav")
 
     def __len__(self):
         return len(self.files)

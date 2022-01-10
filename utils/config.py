@@ -3,9 +3,11 @@ from inspect import isfunction
 
 
 def get_class_from_str(string, reload=False):
-    if string == 'None':
+    if string == "None":
+
         def noop(*args, **kwargs):
             pass
+
         return noop
 
     module, cls = string.rsplit(".", 1)
