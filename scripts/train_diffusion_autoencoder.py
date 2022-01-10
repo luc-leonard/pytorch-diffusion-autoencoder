@@ -18,8 +18,9 @@ def train(config_path, name, epochs, resume_from):
 
     tb_writer = SummaryWriter(run_path)
     model = get_class_from_str(config.model.target)(**config.model.params).to(device)
+    encoder = get_class_from_str(config.encoder.target)(**config.encoder.params).to(device)
     diffusion = get_class_from_str(config.diffusion.target)(
-        model, **config.diffusion.params
+        model, **config.diffusion.params, latent_encoder=encoder
     ).to(device)
 
     opt = torch.optim.AdamW(diffusion.parameters(), lr=config.training.learning_rate)

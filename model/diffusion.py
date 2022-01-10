@@ -104,9 +104,9 @@ class ClassConditionedGaussianDiffusion(GaussianDiffusion):
 
 
 class AutoEncoderGaussianDiffusion(GaussianDiffusion):
-    def __init__(self, *args, encoder_params, **kwargs):
+    def __init__(self, *args, latent_encoder, **kwargs):
         super().__init__(*args, **kwargs)
-        self.latent_encoder = LatentEncoder(**encoder_params)
+        self.latent_encoder = latent_encoder
 
     def p_mean_variance(self, x, t, clip_denoised: bool, latent=None):
         x_recon = self.predict_start_from_noise(
@@ -137,9 +137,7 @@ class AutoEncoderGaussianDiffusion(GaussianDiffusion):
         device = self.betas.device
         b = shape[0]
         img = torch.randn(shape, device=device)
-        latent = self.latent_encoder(x.unsqueeze(0))
-        print("sampling...")
-        print("latent", latent.shape)
+        latent = self.latent_encoder(x)
         for i in tqdm(
             reversed(range(0, self.num_timesteps)),
             desc="sampling loop time step",

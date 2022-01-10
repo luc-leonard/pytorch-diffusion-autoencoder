@@ -10,6 +10,7 @@ Special thanks for https://github.com/lucidrains/denoising-diffusion-pytorch
 import torch
 from model.diffusion import GaussianDiffusion
 from model.unet import UNet
+from model.latent_encoder import LateEncoder
 
 model = Unet(
         in_channels=1,
@@ -23,11 +24,23 @@ model = Unet(
         z_dim=128,
 )
 
+encoder = LatentEncoder(
+      in_channels = 1
+      out_channels = 1
+      base_hidden_channels = 32
+      n_layers = 4
+      chan_multiplier = [ 1,2,2, 4]
+      inner_layers = [ 1,2,2, 4]
+      attention_layers = [ False, False , True, True]
+      z_dim = 128
+    )
+
 diffusion = AutoEncoderGaussianDiffusion(
     model,
     image_size = 28,
     timesteps = 1000,   # number of steps
-    loss_type = 'l1'    # L1 or L2
+    loss_type = 'l1',    # L1 or L2
+    encoder = encoder,
 )
 
 training_images = torch.randn(8, 1, 28, 28)
