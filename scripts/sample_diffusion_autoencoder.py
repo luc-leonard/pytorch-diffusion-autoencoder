@@ -21,9 +21,10 @@ def show_interpolation(diffusion, model, x_1, x_2):
     x_1_latent = diffusion.latent_encoder(x_1[None])
     x_2_latent = diffusion.latent_encoder(x_2[None])
 
-    interpolations = torch.stack([torch.lerp(x_1_latent, x_2_latent, t) for t in torch.linspace(0, 1, steps=100).to('cuda')]).squeeze(1)
-    print(interpolations.shape)
-    y_s = diffusion.p_decode_loop((100, model.in_channels, *model.size), interpolations.squeeze(1))
+    interpolations = torch.stack([torch.lerp(x_1_latent, x_2_latent, t) for t in torch.linspace(0, 1, steps=100).to(x_1.device)]).squeeze(1)
+
+    noise = torch.randn((100, model.in_channels, *model.size)).to(x_1.device)
+    y_s = diffusion.p_decode_loop((100, model.in_channels, *model.size), interpolations.squeeze(1), x_start=noise)
     y_s = torch.clamp(y_s, 0, 1)
     video = imageio.get_writer('interpolation.gif', fps=25)
     for y in y_s:
