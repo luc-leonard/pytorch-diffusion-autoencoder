@@ -27,7 +27,6 @@ class UNetLayer(nn.Module):
             )
         self.downsample = downsample
         if downsample:
-            assert upsample is False
             self.avgpool = nn.AvgPool2d(2)
 
         self.conv_in = ResConvBlock(c_in, c_out, c_out, is_last)
