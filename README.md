@@ -10,12 +10,12 @@ from model.diffusion import GaussianDiffusion
 from model.unet import UNet
 
 model = Unet(
-        in_channels=3,
-        out_channels=3,
-        base_hidden_channels=128,
+        in_channels=1,
+        out_channels=1,
+        base_hidden_channels=32,
         n_layers=2,
         timestep_embed=16,
-        chan_multiplier=[2, 2],
+        chan_multiplier=[1, 2],
         inner_layers=[3, 3],
         attention_layers=[False, True ],
         z_dim=128,
@@ -28,7 +28,7 @@ diffusion = AutoEncoderGaussianDiffusion(
     loss_type = 'l1'    # L1 or L2
 )
 
-training_images = torch.randn(8, 3, 28, 28)
+training_images = torch.randn(8, 1, 28, 28)
 loss = diffusion(training_images)
 loss.backward()
 # after a lot of training
