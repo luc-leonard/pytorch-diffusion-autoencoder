@@ -6,7 +6,6 @@ import torch
 import torchvision.datasets
 import tqdm
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.transforms import ToTensor
 
 from utils.config import get_class_from_str
 
@@ -49,12 +48,10 @@ def train(config_path, name, epochs, resume_from):
     for epoch in range(epochs):
         tb_writer.add_scalar("epoch", epoch, step)
         new_step = do_epoch(
-            train_dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
+            train_dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer, config.training
         )
         print(f"epoch {epoch} done")
-        do_valid(
-            valid_dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
-        )
+        do_valid(valid_dataloader, diffusion, model, step, tb_writer)
         step = new_step
         torch.save(
             {
@@ -66,19 +63,25 @@ def train(config_path, name, epochs, resume_from):
             Path(run_path) / f"diffusion_{step}.pt",
         )
 
+
 @torch.no_grad()
 def do_valid(dataloader, diffusion, model, step, tb_writer):
     model.eval()
     pbar = tqdm.tqdm(dataloader)
+    sample_every = len(dataloader) // 10
     for image, _ in pbar:
         image = image.to(device)
         with torch.no_grad():
             loss = diffusion(image)
         tb_writer.add_scalar("valid/loss", loss.item(), step)
         pbar.set_description(f"{step}: {loss.item():.4f}")
+        if step % sample_every == 0:
+            sample(diffusion, model, step, image[0], 'valid', tb_writer)
+            tb_writer.add_image("valid/real_image", (image[0] + 1) / 2, step)
         step = step + 1
 
-def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer):
+
+def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer, training_config):
     pbar = tqdm.tqdm(dataloader)
     for image, _ in pbar:
         image = image.to(device)
@@ -91,9 +94,10 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
         loss.backward()
         opt.step()
         pbar.set_description(f"{step}: {loss.item():.4f}")
-        if step % 500 == 0:
-            sample(diffusion, model, step, image[0], tb_writer)
+        if step % training_config.sample_every == 0:
+            sample(diffusion, model, step, image[0], 'train', tb_writer)
             tb_writer.add_image("train/real_image", (image[0] + 1) / 2, step)
+        if step % training_config.save_every == 0:
             torch.save(
                 {
                     "model_state_dict": diffusion.state_dict(),
@@ -107,13 +111,13 @@ def do_epoch(dataloader, diffusion, epoch, model, opt, run_path, step, tb_writer
     return step
 
 
-def sample(diffusion, model, step, x, tb_writer):
+def sample(diffusion, model, step, x, stage, tb_writer):
     model.eval()
     generated, latent = diffusion.p_sample_loop((1, model.in_channels, *model.size), x)
     generated = (generated + 1) / 2
     model.train()
     tb_writer.add_image(
-        "train/image", torchvision.utils.make_grid(generated, nrow=3), step
+        f"{stage}/image", torchvision.utils.make_grid(generated, nrow=3), step
     )
 
 

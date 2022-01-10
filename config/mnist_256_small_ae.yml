@@ -30,6 +30,8 @@ diffusion:
 training:
   learning_rate: 1e-4
   batch_size: 256
+  save_every: 1000
+  sample_every: 500
 
 data:
   target: data.mnist.MNIST
