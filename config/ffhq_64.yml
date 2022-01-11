@@ -33,12 +33,13 @@ diffusion:
 
 training:
   learning_rate: 2e-5
-  batch_size: 64
+  batch_size: 100
   save_every: 1000
   sample_every: 500
   grandient_accumulation_steps: 1
   grad_clip: 0.1
   ema_decay: 0.995
+  fp16: False
 
 
 data:

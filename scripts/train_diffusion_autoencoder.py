@@ -53,6 +53,7 @@ class Trainer(object):
         self.opt = torch.optim.AdamW(self.diffusion.parameters(), lr=config.training.learning_rate)
         self.current_step = 0
         self.current_epoch = 0
+        self.fp16 = config.training.fp16
 
         if checkpoint_path is not None:
             self.load(checkpoint_path)
@@ -121,16 +122,28 @@ class Trainer(object):
         self.diffusion.train()
         step = self.current_step
         pbar = tqdm.tqdm(self.train_dataloader)
+        scaler = None
+        if self.fp16:
+            scaler = torch.cuda.amp.GradScaler()
         for image, _ in pbar:
             image = image.to(device)
             self.opt.zero_grad()
 
-            loss = self.diffusion(image)
+            with torch.cuda.amp.autocast(enabled=self.fp16):
+                loss = self.diffusion(image)
             self.tb_writer.add_scalar("train/loss", loss.item(), step)
             self.tb_writer.add_scalar("train/epoch", epoch, step)
-            loss.backward()
-            self.opt.step()
+
             pbar.set_description(f"{step}: {loss.item():.4f}")
+            if self.fp16:
+                assert scaler
+                scaler.scale(loss).backward()
+                scaler.step(self.opt)
+                scaler.update()
+            else:
+                loss.backward()
+                self.opt.step()
+
             if step % self.sample_every == 0:
                 self.sample('train', image[0], step)
                 self.tb_writer.add_image("train/real_image", (image[0] + 1) / 2, step)
@@ -139,6 +152,7 @@ class Trainer(object):
             step = step + 1
         return step
 
+    @torch.no_grad()
     def _do_valid(self):
         self.diffusion.eval()
         pbar = tqdm.tqdm(self.valid_dataloader)
@@ -156,6 +170,7 @@ class Trainer(object):
         self.sample('valid', image[0], step)
         self.tb_writer.add_image("valid/real_image", (image[0] + 1) / 2, step)
 
+    @torch.no_grad()
     def sample(self, stage, x, step):
         self.diffusion.eval()
         generated, latent = self.diffusion.p_sample_loop((1, self.model.in_channels, *self.model.size), x[None])
