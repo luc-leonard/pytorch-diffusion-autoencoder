@@ -56,7 +56,7 @@ def sample(config_path, checkpoint_path, batch_size=1, device="cpu"):
         model, **config.diffusion.params, latent_encoder=encoder
     ).to(device)
     print(f"Resuming from {checkpoint_path}")
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, map_location=device)
     diffusion.load_state_dict(checkpoint["model_state_dict"], strict=False)
 
     model.eval()

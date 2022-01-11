@@ -74,6 +74,9 @@ class UNet(nn.Module):
                 param *= 0.5 ** 0.5
 
     def forward(self, x, timestep, additional_embed=None):
+        if len(timestep.shape) == 2:
+            timestep = timestep.squeeze(1)
+
         timestep_embed = self.timestep_embed(timestep[:, None])
         embed = torch.cat([timestep_embed, additional_embed], dim=1)
         x = self.input_projection(x, embed)

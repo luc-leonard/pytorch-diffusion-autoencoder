@@ -8,8 +8,12 @@ import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.config import get_class_from_str
+from torch import nn
 
 device = "cuda"
+
+def number_of_params(model: nn.Module) -> int:
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 def train(config_path, name, epochs, resume_from):
@@ -18,7 +22,9 @@ def train(config_path, name, epochs, resume_from):
 
     tb_writer = SummaryWriter(run_path)
     model = get_class_from_str(config.model.target)(**config.model.params).to(device)
+    print(f'model has {number_of_params(model):,} trainable parameters')
     encoder = get_class_from_str(config.encoder.target)(**config.encoder.params).to(device)
+    print(f'encoder has {number_of_params(encoder):,} trainable parameters')
     diffusion = get_class_from_str(config.diffusion.target)(
         model, **config.diffusion.params, latent_encoder=encoder
     ).to(device)
@@ -71,13 +77,16 @@ def train(config_path, name, epochs, resume_from):
 def do_valid(dataloader, diffusion, model, step, tb_writer):
     model.eval()
     pbar = tqdm.tqdm(dataloader)
+    base_step = step
+    losses = []
     for image, _ in pbar:
         image = image.to(device)
-        with torch.no_grad():
-            loss = diffusion(image)
-        tb_writer.add_scalar("valid/loss", loss.item(), step)
+        loss = diffusion(image)
+        losses.append(loss)
         pbar.set_description(f"{step}: {loss.item():.4f}")
         step = step + 1
+    for _step in range(base_step, step):
+        tb_writer.add_scalar("valid/loss", torch.stack(losses).mean().item(), _step)
     sample(diffusion, model, step, image[0], 'valid', tb_writer)
     tb_writer.add_image("valid/real_image", (image[0] + 1) / 2, step)
 
