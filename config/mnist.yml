@@ -10,7 +10,7 @@ model:
     chan_multiplier: [1, 2]
     inner_layers: [2, 2]
     attention_layers: [False, True]
-    z_dim: 32
+    z_dim: 128
 
 encoder:
     target: model.latent_encoder.LatentEncoder
@@ -21,7 +21,7 @@ encoder:
       chan_multiplier: [1,2]
       inner_layers: [1,2]
       attention_layers: [ False, False , True, True]
-      z_dim: 32
+      z_dim: 128
       dropout: 0.1
 
 diffusion:
@@ -32,10 +32,14 @@ diffusion:
 
 
 training:
-  learning_rate: 2e-5
+  learning_rate: 1e-4
   batch_size: 256
   save_every: 1000
   sample_every: 500
+  grandient_accumulation_steps: 1
+  grad_clip: 0.1
+  ema_decay: 0.995
+  fp16: True
 
 data:
   target: data.mnist.MNIST

@@ -35,17 +35,37 @@ class UNet(nn.Module):
 
         down_layers = []
         up_layers = []
-
+        current_size = size[0]
         for level in range(n_layers - 1):
+            print(f'current_size: {current_size} for level {level}. Attentions: {attention_layers[level]}')
             layer = UNetLayer(
                 base_hidden_channels * chan_multiplier[level],
                 base_hidden_channels * chan_multiplier[level + 1],
                 inner_layers=inner_layers[level],
                 attention=attention_layers[level],
-                downsample=level > 0,
+                downsample=True,
                 embeddings_dim=timestep_embed + z_dim,
             )
+            current_size //= 2
             down_layers.append(layer)
+        print(f'current_size: {current_size} for level {n_layers}. Attentions: {attention_layers[-1]}')
+        down_layers.append(UNetLayer(
+            base_hidden_channels * chan_multiplier[-1],
+            base_hidden_channels * chan_multiplier[-1],
+            inner_layers=inner_layers[-1],
+            attention=attention_layers[-1],
+            downsample=True,
+            embeddings_dim=timestep_embed + z_dim,
+        ))
+
+        up_layers.append(UNetLayer(
+            base_hidden_channels * chan_multiplier[-1] * 2,
+            base_hidden_channels * chan_multiplier[-1],
+            inner_layers=inner_layers[-1],
+            attention=attention_layers[-1],
+            upsample=True,
+            embeddings_dim=timestep_embed + z_dim,
+        ))
 
         for level in reversed(range(n_layers - 1)):
             layer = UNetLayer(
@@ -53,7 +73,7 @@ class UNet(nn.Module):
                 base_hidden_channels * chan_multiplier[level],
                 inner_layers=inner_layers[level],
                 attention=attention_layers[level],
-                upsample=level > 0,
+                upsample=True,
                 embeddings_dim=timestep_embed + z_dim,
             )
             up_layers.append(layer)

@@ -136,13 +136,17 @@ class Trainer(object):
 
             pbar.set_description(f"{step}: {loss.item():.4f}")
             if self.fp16:
-                assert scaler
                 scaler.scale(loss).backward()
-                scaler.step(self.opt)
-                scaler.update()
             else:
                 loss.backward()
-                self.opt.step()
+
+            if step % self.grandient_accumulation_steps == 0:
+                if self.fp16:
+                    assert scaler
+                    scaler.step(self.opt)
+                    scaler.update()
+                else:
+                    self.opt.step()
 
             if step % self.sample_every == 0:
                 self.sample('train', image[0], step)

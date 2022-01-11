@@ -9,7 +9,7 @@ model:
     n_layers: 4
     chan_multiplier: [1, 2, 4, 8]
     inner_layers: [3, 3, 3, 3]
-    attention_layers: [False, False, False, True]
+    attention_layers: [False, False, True, False]
     z_dim: 512
 
 encoder:
@@ -20,7 +20,7 @@ encoder:
       n_layers: 5
       chan_multiplier: [1, 2, 4, 8, 8]
       inner_layers: [2, 3, 3, 3, 3]
-      attention_layers: [False, False, False, True, False]
+      attention_layers: [False, False, False, True]
       z_dim: 512
       dropout: 0.1
 
@@ -32,14 +32,14 @@ diffusion:
 
 
 training:
-  learning_rate: 2e-5
+  learning_rate: 1e-4
   batch_size: 100
   save_every: 1000
   sample_every: 500
-  grandient_accumulation_steps: 1
+  grandient_accumulation_steps: 2
   grad_clip: 0.1
   ema_decay: 0.995
-  fp16: False
+  fp16: True
 
 
 data:
