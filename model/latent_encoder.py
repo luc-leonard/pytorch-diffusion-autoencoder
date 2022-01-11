@@ -6,15 +6,15 @@ from model.modules.unet_layers import UNetLayer
 class LatentEncoder(nn.Module):
     def __init__(
         self,
-        in_channels=3,
-        base_hidden_channels=128,
-        n_layers=4,
-        chan_multiplier=[],
-        inner_layers=[],
-        attention_layers=[],
-        z_dim=256,
+        *,
+        in_channels,
+        base_hidden_channels,
+        n_layers,
+        chan_multiplier,
+        inner_layers,
+        attention_layers,
+        z_dim,
         dropout=None,
-        size=None,
     ):
         super(LatentEncoder, self).__init__()
         self.input_projection = UNetLayer(

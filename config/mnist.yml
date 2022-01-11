@@ -10,19 +10,19 @@ model:
     chan_multiplier: [1, 2]
     inner_layers: [2, 2]
     attention_layers: [False, True]
-    z_dim: 128
+    z_dim: 32
 
 encoder:
     target: model.latent_encoder.LatentEncoder
     params:
       in_channels: 1
-      base_hidden_channels: 128 # this is due to a mistake :) retrain ? this encoder is WAY TOO BIG
-      n_layers: 4
-      chan_multiplier: [ 1,2,2, 4]
-      inner_layers: [ 1,2,2, 4]
+      base_hidden_channels: 32
+      n_layers: 2
+      chan_multiplier: [1,2]
+      inner_layers: [1,2]
       attention_layers: [ False, False , True, True]
-      z_dim: 128
-      dropout: 0.0
+      z_dim: 32
+      dropout: 0.1
 
 diffusion:
   target: model.diffusion.AutoEncoderGaussianDiffusion
@@ -32,7 +32,7 @@ diffusion:
 
 
 training:
-  learning_rate: 1e-4
+  learning_rate: 2e-5
   batch_size: 256
   save_every: 1000
   sample_every: 500

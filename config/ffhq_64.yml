@@ -6,23 +6,22 @@ model:
     in_channels: 3
     out_channels: 3
     base_hidden_channels: 64
-    n_layers: 3
-    chan_multiplier: [1, 2, 2]
-    inner_layers: [2, 3, 3]
-    attention_layers: [False, False, True]
-    z_dim: 256
+    n_layers: 4
+    chan_multiplier: [1, 2, 4, 8]
+    inner_layers: [3, 3, 3, 3]
+    attention_layers: [False, False, False, True]
+    z_dim: 512
 
 encoder:
     target: model.latent_encoder.LatentEncoder
     params:
-      size: [64, 64]
       in_channels: 3
       base_hidden_channels: 64
-      n_layers: 3
-      chan_multiplier: [1, 2, 2]
-      inner_layers: [2, 3, 3]
-      attention_layers: [False, False, True]
-      z_dim: 256
+      n_layers: 5
+      chan_multiplier: [1, 2, 4, 8, 8]
+      inner_layers: [2, 3, 3, 3, 3]
+      attention_layers: [False, False, False, True, False]
+      z_dim: 512
       dropout: 0.1
 
 diffusion:
@@ -33,12 +32,13 @@ diffusion:
 
 
 training:
-  learning_rate: 1e-4
-  batch_size: 128
+  learning_rate: 2e-5
+  batch_size: 64
   save_every: 1000
   sample_every: 500
   grandient_accumulation_steps: 1
   grad_clip: 0.1
+  ema_decay: 0.995
 
 
 data:

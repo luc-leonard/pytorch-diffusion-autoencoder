@@ -1,5 +1,7 @@
 import importlib
 from inspect import isfunction
+from torch import nn
+
 
 
 def get_class_from_str(string, reload=False):
@@ -25,3 +27,6 @@ def default(val, d):
     if exists(val):
         return val
     return d() if isfunction(d) else d
+
+def number_of_params(model: nn.Module) -> int:
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
