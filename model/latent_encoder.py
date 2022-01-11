@@ -17,12 +17,14 @@ class LatentEncoder(nn.Module):
         dropout=None,
     ):
         super(LatentEncoder, self).__init__()
+        print('LatentEncoder')
         self.input_projection = UNetLayer(
             in_channels, base_hidden_channels, inner_layers=3, downsample=False
         )
 
         down_layers = []
         for level in range(n_layers - 1):
+            print(f'level {level}. Attentions: {attention_layers[level]}')
             layer = UNetLayer(
                 base_hidden_channels * chan_multiplier[level],
                 base_hidden_channels * chan_multiplier[level + 1],
@@ -31,6 +33,14 @@ class LatentEncoder(nn.Module):
                 downsample=True,
             )
             down_layers.append(layer)
+        print(f'level {level}. Attentions: {attention_layers[-1]}')
+        down_layers.append(UNetLayer(
+            base_hidden_channels * chan_multiplier[-1],
+            base_hidden_channels * chan_multiplier[-1],
+            inner_layers=inner_layers[-1],
+            attention=attention_layers[-1],
+            downsample=True,
+        ))
         self.net = nn.Sequential(*down_layers)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.head = nn.Linear(base_hidden_channels * chan_multiplier[-1], z_dim)

@@ -21,6 +21,7 @@ class UNet(nn.Module):
     ):
 
         super().__init__()
+        print("UNet")
         self.size = size
         self.in_channels = in_channels
         self.timestep_embed = FourierFeatures(1, timestep_embed)
@@ -37,7 +38,7 @@ class UNet(nn.Module):
         up_layers = []
         current_size = size[0]
         for level in range(n_layers - 1):
-            print(f'current_size: {current_size} for level {level}. Attentions: {attention_layers[level]}')
+            print(f'resolution : {current_size} for level {level}. Attentions: {attention_layers[level]}')
             layer = UNetLayer(
                 base_hidden_channels * chan_multiplier[level],
                 base_hidden_channels * chan_multiplier[level + 1],
@@ -48,7 +49,7 @@ class UNet(nn.Module):
             )
             current_size //= 2
             down_layers.append(layer)
-        print(f'current_size: {current_size} for level {n_layers}. Attentions: {attention_layers[-1]}')
+        print(f'resolution: {current_size} for level {n_layers}. Attentions: {attention_layers[-1]}')
         down_layers.append(UNetLayer(
             base_hidden_channels * chan_multiplier[-1],
             base_hidden_channels * chan_multiplier[-1],
@@ -68,6 +69,8 @@ class UNet(nn.Module):
         ))
 
         for level in reversed(range(n_layers - 1)):
+            current_size *= 2
+            print(f'resolution: {current_size} for level {level}. Attentions: {attention_layers[level]}')
             layer = UNetLayer(
                 base_hidden_channels * chan_multiplier[level + 1] * 2,
                 base_hidden_channels * chan_multiplier[level],
@@ -77,6 +80,7 @@ class UNet(nn.Module):
                 embeddings_dim=timestep_embed + z_dim,
             )
             up_layers.append(layer)
+
 
         self.down = nn.ModuleList(down_layers)
         self.up = nn.ModuleList(up_layers)
