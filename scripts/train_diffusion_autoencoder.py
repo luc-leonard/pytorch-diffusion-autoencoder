@@ -48,8 +48,8 @@ class Trainer(object):
 
         self.ema = EMA(config.training.ema_decay)
         self.ema_model = copy.deepcopy(self.model)
-        self.update_ema_every = 500
-        self.step_start_ema = 1000
+        self.update_ema_every = 1000
+        self.step_start_ema = 10000
         self.grandient_accumulation_steps = config.training.grandient_accumulation_steps
         self.opt = torch.optim.AdamW(self.diffusion.parameters(), lr=config.training.learning_rate)
         self.current_step = 0
@@ -86,8 +86,8 @@ class Trainer(object):
     def reset_parameters(self):
         self.ema_model.load_state_dict(self.model.state_dict())
 
-    def step_ema(self):
-        if self.step < self.step_start_ema:
+    def step_ema(self, step):
+        if step < self.step_start_ema:
             self.reset_parameters()
             return
         self.ema.update_model_average(self.ema_model, self.model)
@@ -97,17 +97,16 @@ class Trainer(object):
             {
                 "model_state_dict": self.diffusion.state_dict(),
                 "optimizer_state_dict": self.opt.state_dict(),
-                "step": self.current_step,
+                "step": step,
                 "epoch": self.current_epoch,
             },
-            Path(self.run_path) / f"diffusion_{step}.pt",
-            shutil.copy(Path(self.run_path) / f"diffusion_{step}.pt", Path(self.run_path) / "last.pt"),
-        )
+            str(Path(self.run_path) / f"diffusion_{step}.pt")),
+        shutil.copy(Path(self.run_path) / f"diffusion_{step}.pt", Path(self.run_path) / "last.pt")
 
     def load(self, checkpoint_path):
         print(f"Resuming from {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path)
-        self.diffusion.load_state_dict(checkpoint["model_state_dict"], strict=False)
+        self.diffusion.load_state_dict(checkpoint["model_state_dict"], strict=True)
         self.opt.load_state_dict(checkpoint["optimizer_state_dict"])
         self.current_step = checkpoint["step"]
         self.current_epoch = checkpoint["epoch"]

@@ -10,7 +10,7 @@ model:
     chan_multiplier: [1, 2]
     inner_layers: [2, 2]
     attention_layers: [False, True]
-    z_dim: 128
+    z_dim: 64
 
 encoder:
     target: model.latent_encoder.LatentEncoder
@@ -20,8 +20,8 @@ encoder:
       n_layers: 2
       chan_multiplier: [1,2]
       inner_layers: [1,2]
-      attention_layers: [ False, True]
-      z_dim: 128
+      attention_layers: [False, True]
+      z_dim: 64
       dropout: 0.1
 
 diffusion:
@@ -32,7 +32,17 @@ diffusion:
 
 
 training:
-  learning_rate: 1e-3
+  optimizer:
+    target: torch.optim.AdamW
+    params:
+      lr: 1e-4
+      betas: (0.9, 0.999)
+      weight_decay: 0.0001
+      amsgrad: False
+  scheduler:
+    target: None
+    params:
+  learning_rate: 1e-4
   batch_size: 256
   save_every: 1000
   sample_every: 500

@@ -16,15 +16,24 @@ class UNetLayer(nn.Module):
         upsample: bool = False,
         is_last=False,
         embeddings_dim=None,
+        cross_attention=False,
     ):
         super().__init__()
         layers = []
 
         if embeddings_dim:
-            self.embedding_mlp = nn.Sequential(
-                nn.Mish(),
-                nn.Linear(embeddings_dim, c_out),
-            )
+            if not cross_attention:
+                self.embedding_mlp = nn.Sequential(
+                    nn.Mish(),
+                    # attention between embeddings and input ?
+                    nn.Linear(embeddings_dim, c_out),
+                )
+            else:
+                self.embedding_mlp = nn.Sequential(
+                    nn.Mish(),
+                    nn.MultiheadAttention(embeddings_dim,  embeddings_dim // 64, kdim=c_in, vdim=c_in),
+                    nn.Linear(embeddings_dim, c_out),
+                )
         self.downsample = downsample
         if downsample:
             self.avgpool = nn.AvgPool2d(2)
