@@ -10,7 +10,7 @@ model:
     chan_multiplier: [1, 2]
     inner_layers: [2, 2]
     attention_layers: [False, True]
-    z_dim: 64
+    z_dim: 128
 
 encoder:
     target: model.latent_encoder.LatentEncoder
@@ -21,7 +21,7 @@ encoder:
       chan_multiplier: [1,2]
       inner_layers: [1,2]
       attention_layers: [False, True]
-      z_dim: 64
+      z_dim: 128
       dropout: 0.1
 
 diffusion:

@@ -33,7 +33,7 @@ class LatentEncoder(nn.Module):
                 downsample=True,
             )
             down_layers.append(layer)
-        print(f'level {level}. Attentions: {attention_layers[-1]}')
+        print(f'level {n_layers - 1}. Attentions: {attention_layers[-1]}')
         down_layers.append(UNetLayer(
             base_hidden_channels * chan_multiplier[-1],
             base_hidden_channels * chan_multiplier[-1],

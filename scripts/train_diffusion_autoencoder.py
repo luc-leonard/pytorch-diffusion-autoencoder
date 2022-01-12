@@ -52,6 +52,11 @@ class Trainer(object):
         self.step_start_ema = 10000
         self.grandient_accumulation_steps = config.training.grandient_accumulation_steps
         self.opt = torch.optim.AdamW(self.diffusion.parameters(), lr=config.training.learning_rate)
+        if config.training.scheduler:
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.opt, patience=15, verbose=True)
+            print(f"Using scheduler {self.scheduler}")
+        else:
+            self.scheduler = None
         self.current_step = 0
         self.current_epoch = 0
         self.fp16 = config.training.fp16
@@ -97,6 +102,7 @@ class Trainer(object):
             {
                 "model_state_dict": self.diffusion.state_dict(),
                 "optimizer_state_dict": self.opt.state_dict(),
+                "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
                 "step": step,
                 "epoch": self.current_epoch,
             },
@@ -108,19 +114,25 @@ class Trainer(object):
         checkpoint = torch.load(checkpoint_path)
         self.diffusion.load_state_dict(checkpoint["model_state_dict"], strict=True)
         self.opt.load_state_dict(checkpoint["optimizer_state_dict"])
+        if "scheduler_state_dict" in checkpoint:
+            self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         self.current_step = checkpoint["step"]
         self.current_epoch = checkpoint["epoch"]
 
 
     def train(self):
         base_epoch = self.current_epoch
+        self.tb_writer.add_text("config", str(self.config))
         for epoch in range(base_epoch, base_epoch + self.nb_epochs_to_train):
             step = self._do_epoch(epoch)
-            self._do_valid()
+            valid_loss = self._do_valid()
+            self.current_epoch += 1
+            print(f"Epoch {epoch} done, step {step}, valid loss {valid_loss}")
+            if self.scheduler:
+                self.scheduler.step(valid_loss)
+                print(f"Scheduler step {self.scheduler.num_bad_epochs}")
             self.current_step = step
             self.save(step)
-            self.current_epoch += 1
-
 
     def _do_epoch(self, epoch):
         self.diffusion.train()
@@ -137,6 +149,7 @@ class Trainer(object):
                 loss = self.diffusion(image)
             self.tb_writer.add_scalar("train/loss", loss.item(), step)
             self.tb_writer.add_scalar("train/epoch", epoch, step)
+            self.tb_writer.add_scalar("train/lr", self.opt.param_groups[0]["lr"], step)
 
             pbar.set_description(f"{step}: {loss.item():.4f}")
             if self.fp16:
@@ -173,10 +186,12 @@ class Trainer(object):
             losses.append(loss)
             pbar.set_description(f"{step}: {loss.item():.4f}")
             step = step + 1
+        mean_loss = torch.stack(losses).mean()
         for _step in range(base_step, step):
-            self.tb_writer.add_scalar("valid/loss", torch.stack(losses).mean().item(), _step)
+            self.tb_writer.add_scalar("valid/loss", mean_loss.item(), _step)
         self.sample('valid', image[0], step)
         self.tb_writer.add_image("valid/real_image", (image[0] + 1) / 2, step)
+        return mean_loss
 
     @torch.no_grad()
     def sample(self, stage, x, step):
@@ -195,7 +210,6 @@ class Trainer(object):
 @click.option("--epochs", "-e", default=500)
 @click.option("--resume-from", "-r", default=None)
 def main(config: str, name: str, resume_from: str, epochs: int):
-    #train(config, name, epochs, resume_from)
     _config = omegaconf.OmegaConf.load(config)
     Trainer(_config, resume_from, name, epochs).train()
 
