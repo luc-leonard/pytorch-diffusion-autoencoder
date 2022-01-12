@@ -17,6 +17,7 @@ class UNet(nn.Module):
         inner_layers=[],
         attention_layers=[],
         z_dim=1,
+        cross_attention=False,
         size=None,
     ):
 
@@ -32,6 +33,7 @@ class UNet(nn.Module):
             inner_layers=3,
             downsample=False,
             embeddings_dim=timestep_embed + z_dim,
+            cross_attention=cross_attention
         )
 
         down_layers = []
@@ -46,6 +48,7 @@ class UNet(nn.Module):
                 attention=attention_layers[level],
                 downsample=True,
                 embeddings_dim=timestep_embed + z_dim,
+                cross_attention=cross_attention
             )
             current_size //= 2
             down_layers.append(layer)
@@ -57,6 +60,7 @@ class UNet(nn.Module):
             attention=attention_layers[-1],
             downsample=True,
             embeddings_dim=timestep_embed + z_dim,
+            cross_attention=cross_attention
         ))
 
         up_layers.append(UNetLayer(
@@ -66,6 +70,7 @@ class UNet(nn.Module):
             attention=attention_layers[-1],
             upsample=True,
             embeddings_dim=timestep_embed + z_dim,
+            cross_attention=cross_attention
         ))
 
         for level in reversed(range(n_layers - 1)):
@@ -78,6 +83,7 @@ class UNet(nn.Module):
                 attention=attention_layers[level],
                 upsample=True,
                 embeddings_dim=timestep_embed + z_dim,
+                cross_attention=cross_attention
             )
             up_layers.append(layer)
 

@@ -7,6 +7,7 @@ model:
     out_channels: 3
     base_hidden_channels: 64
     n_layers: 4
+    cross_attention: False
     chan_multiplier: [1, 2, 4, 8]
     inner_layers: [3, 3, 3, 3]
     attention_layers: [False, False, True, False]
@@ -17,10 +18,11 @@ encoder:
     params:
       in_channels: 3
       base_hidden_channels: 64
-      n_layers: 5
-      chan_multiplier: [1, 2, 4, 8, 8]
-      inner_layers: [2, 3, 3, 3, 3]
-      attention_layers: [False, False, False, True]
+      n_layers: 4
+      chan_multiplier: [1, 2, 4, 8]
+      inner_layers: [3, 3, 3, 3]
+      attention_layers: [False, False, True, False]
+      linear_layers: [128, 256]
       z_dim: 512
       dropout: 0.1
 
@@ -32,14 +34,23 @@ diffusion:
 
 
 training:
-  learning_rate: 1e-4
   batch_size: 100
+  learning_rate: 1e-3
   save_every: 1000
   sample_every: 500
   grandient_accumulation_steps: 2
-  grad_clip: 0.1
+  grad_clip: 1
   ema_decay: 0.995
+  epochs: 500
   fp16: True
+  optimizer:
+    target: torch.optim.AdamW
+    params:
+      lr: 1e-4
+  scheduler:
+    target: torch.optim.lr_scheduler.ReduceLROnPlateau
+    patience: 5
+
 
 
 data:

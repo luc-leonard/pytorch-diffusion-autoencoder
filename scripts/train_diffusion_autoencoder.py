@@ -10,7 +10,18 @@ import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.config import get_class_from_str, number_of_params
-from torch import nn
+import logging
+
+def init_logger():
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger.addHandler(handler)
+    return logger
+
+LOGGER = init_logger()
+LOGGER.info("LOG SYSTEM: Started")
 
 device = "cuda"
 
@@ -48,12 +59,13 @@ class Trainer(object):
 
         self.ema = EMA(config.training.ema_decay)
         self.ema_model = copy.deepcopy(self.model)
+        self.grad_clip = config.training.grad_clip
         self.update_ema_every = 1000
         self.step_start_ema = 10000
         self.grandient_accumulation_steps = config.training.grandient_accumulation_steps
         self.opt = torch.optim.AdamW(self.diffusion.parameters(), lr=config.training.learning_rate)
         if config.training.scheduler:
-            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.opt, patience=15, verbose=True)
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.opt, patience=config.training.scheduler.patience, verbose=True)
             print(f"Using scheduler {self.scheduler}")
         else:
             self.scheduler = None
@@ -83,10 +95,10 @@ class Trainer(object):
         test_size = len(full_dataset) - train_size
         self.train_dataset, self.valid_dataset = torch.utils.data.random_split(full_dataset, [train_size, test_size])
         self.train_dataloader = torch.utils.data.DataLoader(
-            self.train_dataset, batch_size=self.config.training.batch_size, shuffle=True, num_workers=4
+            self.train_dataset, batch_size=self.config.training.batch_size, shuffle=True, num_workers=4, pin_memory=True
         )
         self.valid_dataloader = torch.utils.data.DataLoader(self.valid_dataset, batch_size=self.config.training.batch_size,
-                                                       shuffle=True, num_workers=4)
+                                                       shuffle=True, num_workers=4, pin_memory=True)
 
     def reset_parameters(self):
         self.ema_model.load_state_dict(self.model.state_dict())
@@ -128,7 +140,7 @@ class Trainer(object):
             valid_loss = self._do_valid()
             self.current_epoch += 1
             print(f"Epoch {epoch} done, step {step}, valid loss {valid_loss}")
-            if self.scheduler:
+            if self.scheduler and isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                 self.scheduler.step(valid_loss)
                 print(f"Scheduler step {self.scheduler.num_bad_epochs}")
             self.current_step = step
@@ -160,10 +172,14 @@ class Trainer(object):
             if step % self.grandient_accumulation_steps == 0:
                 if self.fp16:
                     assert scaler
+                    scaler.unscale_(self.opt)
+                    torch.nn.utils.clip_grad_norm_(self.diffusion.parameters(), self.grad_clip)
                     scaler.step(self.opt)
                     scaler.update()
                 else:
                     self.opt.step()
+            if self.scheduler and not isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                self.scheduler.step()
 
             if step % self.sample_every == 0:
                 self.sample('train', image[0], step)

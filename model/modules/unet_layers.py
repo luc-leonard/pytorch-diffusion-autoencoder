@@ -5,6 +5,12 @@ from model.modules.residual_layers import ResConvBlock
 from utils.torch import expand_to_planes
 
 
+class CrossAttention(nn.Module):
+    def __init__(self, in_channels, out_channels, query_size):
+        super(CrossAttention, self).__init__()
+        self.attention = nn.MultiheadAttention(in_channels, in_channels // 64, qd)
+        self.linear_in = nn.Linear(in_channels, out_channels)
+
 class UNetLayer(nn.Module):
     def __init__(
         self,
@@ -29,11 +35,11 @@ class UNetLayer(nn.Module):
                     nn.Linear(embeddings_dim, c_out),
                 )
             else:
-                self.embedding_mlp = nn.Sequential(
+                self.embedding_mlp = nn.ModuleList([
                     nn.Mish(),
                     nn.MultiheadAttention(embeddings_dim,  embeddings_dim // 64, kdim=c_in, vdim=c_in),
                     nn.Linear(embeddings_dim, c_out),
-                )
+                ])
         self.downsample = downsample
         if downsample:
             self.avgpool = nn.AvgPool2d(2)

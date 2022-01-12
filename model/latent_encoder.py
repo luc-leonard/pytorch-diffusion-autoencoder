@@ -15,6 +15,7 @@ class LatentEncoder(nn.Module):
         attention_layers,
         z_dim,
         dropout=None,
+        linear_layers=[]
     ):
         super(LatentEncoder, self).__init__()
         print('LatentEncoder')
@@ -43,7 +44,20 @@ class LatentEncoder(nn.Module):
         ))
         self.net = nn.Sequential(*down_layers)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.head = nn.Linear(base_hidden_channels * chan_multiplier[-1], z_dim)
+
+        head_layers = []
+        c_out = base_hidden_channels * chan_multiplier[-1]
+        for i in range(len(linear_layers)):
+            if i == 0:
+                c_in = base_hidden_channels * chan_multiplier[-1]
+            else:
+                c_in = linear_layers[i - 1]
+            head_layers.append(nn.Linear(c_in, linear_layers[i]))
+            head_layers.append(nn.Mish())
+            c_out = linear_layers[i]
+
+        head_layers.append(nn.Linear(c_out, z_dim))
+        self.head = nn.Sequential(*head_layers)
         if dropout > 0:
             self.dropout = nn.Dropout(dropout)
         else:

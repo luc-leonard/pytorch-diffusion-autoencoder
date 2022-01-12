@@ -16,13 +16,13 @@ class FFHQDataset(MyImageFolderDataset):
     def __getitem__(self, index):
         data = super().__getitem__(index)
         file_id = data["path"].split("/")[-1].split(".")[0]
-        try:
-            meta = json.load(
-                (
-                    self.root / "ffhq-features-dataset" / "json" / f"{file_id}.json"
-                ).open()
-            )
-            gender = meta[0]["faceAttributes"]["gender"]
-        except:
-            gender = "unknown"
-        return data["image"], torch.tensor(GENDERS_ID[gender])
+        # try:
+        #     meta = json.load(
+        #         (
+        #             self.root / "ffhq-features-dataset" / "json" / f"{file_id}.json"
+        #         ).open()
+        #     )
+        #     gender = meta[0]["faceAttributes"]["gender"]
+        # except:
+        #     gender = "unknown"
+        return data["image"], torch.tensor(0)
