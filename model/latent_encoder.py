@@ -1,6 +1,7 @@
 from torch import nn
 
 from model.modules.unet_layers import UNetLayer
+import torch
 
 
 class LatentEncoder(nn.Module):
@@ -24,34 +25,26 @@ class LatentEncoder(nn.Module):
         )
 
         down_layers = []
-        for level in range(n_layers - 1):
+        c_in = base_hidden_channels
+        for level in range(n_layers):
             print(f'level {level}. Attentions: {attention_layers[level]}')
             layer = UNetLayer(
+                c_in,
                 base_hidden_channels * chan_multiplier[level],
-                base_hidden_channels * chan_multiplier[level + 1],
                 inner_layers=inner_layers[level],
                 attention=attention_layers[level],
                 downsample=True,
             )
             down_layers.append(layer)
-        print(f'level {n_layers - 1}. Attentions: {attention_layers[-1]}')
-        down_layers.append(UNetLayer(
-            base_hidden_channels * chan_multiplier[-1],
-            base_hidden_channels * chan_multiplier[-1],
-            inner_layers=inner_layers[-1],
-            attention=attention_layers[-1],
-            downsample=True,
-        ))
-        self.net = nn.Sequential(*down_layers)
+            c_in = base_hidden_channels * chan_multiplier[level]
+        self.layers = nn.ModuleList(down_layers)
+
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
         head_layers = []
         c_out = base_hidden_channels * chan_multiplier[-1]
-        for i in range(len(linear_layers)):
-            if i == 0:
-                c_in = base_hidden_channels * chan_multiplier[-1]
-            else:
-                c_in = linear_layers[i - 1]
+        for i in range(1, len(linear_layers)):
+            c_in = linear_layers[i - 1]
             head_layers.append(nn.Linear(c_in, linear_layers[i]))
             head_layers.append(nn.Mish())
             c_out = linear_layers[i]
@@ -63,10 +56,18 @@ class LatentEncoder(nn.Module):
         else:
             self.dropout = nn.Identity()
 
+        with torch.no_grad():
+            for param in self.parameters():
+                param *= 0.5 ** 0.5
+
     def forward(self, x):
         x = self.input_projection(x)
-        x = self.net(x)
-        x = self.avgpool(x)
-        x = x.squeeze(-1).squeeze(-1)
+        xs = []
+        for layer in self.layers:
+            x = layer(x)
+            avg_x = self.avgpool(x)
+            xs.append(avg_x)
+
+        x = torch.cat(xs, dim=1).squeeze(-1).squeeze(-1)
         x = self.head(x)
         return self.dropout(x)

@@ -27,6 +27,8 @@ class UNet(nn.Module):
         self.in_channels = in_channels
         self.timestep_embed = FourierFeatures(1, timestep_embed)
 
+        down_layers = []
+        up_layers = []
         self.input_projection = UNetLayer(
             in_channels,
             base_hidden_channels,
@@ -36,49 +38,41 @@ class UNet(nn.Module):
             cross_attention=cross_attention
         )
 
-        down_layers = []
-        up_layers = []
         current_size = size[0]
-        for level in range(n_layers - 1):
+
+        c_in = base_hidden_channels
+        x_shapes = [c_in]
+
+        for level in range(n_layers):
             print(f'resolution : {current_size} for level {level}. Attentions: {attention_layers[level]}')
             layer = UNetLayer(
-                base_hidden_channels * chan_multiplier[level],
-                base_hidden_channels * chan_multiplier[level + 1],
+                c_in=c_in,
+                c_out=base_hidden_channels * chan_multiplier[level],
                 inner_layers=inner_layers[level],
                 attention=attention_layers[level],
                 downsample=True,
                 embeddings_dim=timestep_embed + z_dim,
                 cross_attention=cross_attention
             )
+            c_in = base_hidden_channels * chan_multiplier[level]
+            x_shapes.append(c_in)
             current_size //= 2
             down_layers.append(layer)
-        print(f'resolution: {current_size} for level {n_layers}. Attentions: {attention_layers[-1]}')
-        down_layers.append(UNetLayer(
-            base_hidden_channels * chan_multiplier[-1],
-            base_hidden_channels * chan_multiplier[-1],
+
+        self.middle_layer = UNetLayer(
+            c_in=base_hidden_channels * chan_multiplier[-1],
+            c_out=base_hidden_channels * chan_multiplier[-1],
             inner_layers=inner_layers[-1],
-            attention=attention_layers[-1],
-            downsample=True,
             embeddings_dim=timestep_embed + z_dim,
             cross_attention=cross_attention
-        ))
-
-        up_layers.append(UNetLayer(
-            base_hidden_channels * chan_multiplier[-1] * 2,
-            base_hidden_channels * chan_multiplier[-1],
-            inner_layers=inner_layers[-1],
-            attention=attention_layers[-1],
-            upsample=True,
-            embeddings_dim=timestep_embed + z_dim,
-            cross_attention=cross_attention
-        ))
-
-        for level in reversed(range(n_layers - 1)):
+        )
+        x_shapes.pop()
+        for level in reversed(range(n_layers)):
             current_size *= 2
             print(f'resolution: {current_size} for level {level}. Attentions: {attention_layers[level]}')
             layer = UNetLayer(
-                base_hidden_channels * chan_multiplier[level + 1] * 2,
-                base_hidden_channels * chan_multiplier[level],
+                base_hidden_channels * chan_multiplier[level] * 2,
+                x_shapes.pop(),
                 inner_layers=inner_layers[level],
                 attention=attention_layers[level],
                 upsample=True,
@@ -86,7 +80,6 @@ class UNet(nn.Module):
                 cross_attention=cross_attention
             )
             up_layers.append(layer)
-
 
         self.down = nn.ModuleList(down_layers)
         self.up = nn.ModuleList(up_layers)
@@ -99,6 +92,7 @@ class UNet(nn.Module):
             is_last=True,
             embeddings_dim=timestep_embed + z_dim,
         )
+
         with torch.no_grad():
             for param in self.parameters():
                 param *= 0.5 ** 0.5

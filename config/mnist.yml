@@ -5,7 +5,7 @@ model:
     size: [28, 28]
     in_channels: 1
     out_channels: 1
-    base_hidden_channels: 32
+    base_hidden_channels: 64
     n_layers: 2
     chan_multiplier: [1, 2]
     inner_layers: [2, 2]
@@ -16,12 +16,13 @@ encoder:
     target: model.latent_encoder.LatentEncoder
     params:
       in_channels: 1
-      base_hidden_channels: 32
+      base_hidden_channels: 64
       n_layers: 2
       chan_multiplier: [1,2]
       inner_layers: [1,2]
       attention_layers: [False, True]
       z_dim: 128
+      linear_layers: [192, 256, 128]
       dropout: 0.1
 
 diffusion:
@@ -39,9 +40,7 @@ training:
       betas: (0.9, 0.999)
       weight_decay: 0.0001
       amsgrad: False
-  scheduler:
-    target: None
-    params:
+  scheduler: none
   learning_rate: 1e-4
   batch_size: 256
   save_every: 1000

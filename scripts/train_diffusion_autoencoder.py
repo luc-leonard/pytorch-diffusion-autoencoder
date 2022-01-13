@@ -64,7 +64,7 @@ class Trainer(object):
         self.step_start_ema = 10000
         self.grandient_accumulation_steps = config.training.grandient_accumulation_steps
         self.opt = torch.optim.AdamW(self.diffusion.parameters(), lr=config.training.learning_rate)
-        if config.training.scheduler:
+        if config.training.scheduler != 'none':
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.opt, patience=config.training.scheduler.patience, verbose=True)
             print(f"Using scheduler {self.scheduler}")
         else:
@@ -79,6 +79,17 @@ class Trainer(object):
         self.nb_epochs_to_train = nb_epochs_to_train
         self.sample_every = config.training.sample_every
         self.save_every = config.training.save_every
+
+        self.add_model_to_tensorboard()
+        print(self.diffusion)
+
+        for param_group in self.opt.param_groups:
+            param_group['lr'] = config.training.learning_rate
+
+    def add_model_to_tensorboard(self):
+        ...
+        # image, _ = next(iter(self.train_dataloader))
+        # self.tb_writer.add_graph(self.diffusion, image.cuda())
 
     def _create_models(self, config):
         self.model = get_class_from_str(config.model.target)(**config.model.params).to(device)
@@ -126,7 +137,7 @@ class Trainer(object):
         checkpoint = torch.load(checkpoint_path)
         self.diffusion.load_state_dict(checkpoint["model_state_dict"], strict=True)
         self.opt.load_state_dict(checkpoint["optimizer_state_dict"])
-        if "scheduler_state_dict" in checkpoint:
+        if "scheduler_state_dict" in checkpoint and self.scheduler:
             self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         self.current_step = checkpoint["step"]
         self.current_epoch = checkpoint["epoch"]
@@ -144,7 +155,7 @@ class Trainer(object):
                 self.scheduler.step(valid_loss)
                 print(f"Scheduler step {self.scheduler.num_bad_epochs}")
             self.current_step = step
-            self.save(step)
+            #self.save(step)
 
     def _do_epoch(self, epoch):
         self.diffusion.train()
