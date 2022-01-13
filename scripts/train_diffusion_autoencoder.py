@@ -155,7 +155,6 @@ class Trainer(object):
                 self.scheduler.step(valid_loss)
                 print(f"Scheduler step {self.scheduler.num_bad_epochs}")
             self.current_step = step
-            #self.save(step)
 
     def _do_epoch(self, epoch):
         self.diffusion.train()
@@ -196,6 +195,7 @@ class Trainer(object):
                 self.sample('train', image[0], step)
                 self.tb_writer.add_image("train/real_image", (image[0] + 1) / 2, step)
             if step % self.save_every == 0:
+                self.step_ema(step)
                 self.save(step)
             step = step + 1
         return step

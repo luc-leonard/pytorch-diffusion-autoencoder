@@ -22,7 +22,6 @@ class UNet(nn.Module):
     ):
 
         super().__init__()
-        print("UNet")
         self.size = size
         self.in_channels = in_channels
         self.timestep_embed = FourierFeatures(1, timestep_embed)
@@ -35,7 +34,8 @@ class UNet(nn.Module):
             inner_layers=3,
             downsample=False,
             embeddings_dim=timestep_embed + z_dim,
-            cross_attention=cross_attention
+            cross_attention=cross_attention,
+            attention=False,
         )
 
         current_size = size[0]
