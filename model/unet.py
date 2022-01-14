@@ -36,6 +36,7 @@ class UNet(nn.Module):
             embeddings_dim=timestep_embed + z_dim,
             cross_attention=cross_attention,
             attention=False,
+            groups=1
         )
 
         current_size = size[0]
@@ -85,12 +86,13 @@ class UNet(nn.Module):
         self.up = nn.ModuleList(up_layers)
 
         self.output_projection = UNetLayer(
-            base_hidden_channels * chan_multiplier[0],
+            base_hidden_channels,
             out_channels,
             inner_layers=3,
             upsample=False,
             is_last=True,
             embeddings_dim=timestep_embed + z_dim,
+            groups=1,
         )
 
         with torch.no_grad():

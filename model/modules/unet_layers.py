@@ -23,6 +23,7 @@ class UNetLayer(nn.Module):
         is_last=False,
         embeddings_dim=None,
         cross_attention=False,
+        groups=32,
     ):
         super().__init__()
         layers = []
@@ -44,11 +45,11 @@ class UNetLayer(nn.Module):
         if downsample:
             self.avgpool = nn.AvgPool2d(2)
 
-        self.conv_in = ResConvBlock(c_in, c_out, c_out, is_last)
+        self.conv_in = ResConvBlock(c_in, c_out, c_out, is_last, groups)
         if attention:
             layers.append(SelfAttention2d(c_out, c_out // 64))
         for i in range(inner_layers):
-            layers.append(ResConvBlock(c_out, c_out, c_out, is_last))
+            layers.append(ResConvBlock(c_out, c_out, c_out, is_last, groups))
             if attention:
                 layers.append(SelfAttention2d(c_out, c_out // 64))
 

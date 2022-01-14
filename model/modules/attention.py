@@ -5,7 +5,7 @@ class SelfAttention2d(nn.Module):
     def __init__(self, c_in, n_head=1, dropout_rate=0.1):
         super().__init__()
         assert c_in % n_head == 0
-        self.norm = nn.GroupNorm(1, c_in)
+        self.norm = nn.GroupNorm(32, c_in)
         self.n_head = n_head
         self.qkv_proj = nn.Conv2d(c_in, c_in * 3, 1)
         self.out_proj = nn.Conv2d(c_in, c_in, 1)

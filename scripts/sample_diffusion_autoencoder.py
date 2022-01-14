@@ -16,7 +16,7 @@ from utils.config import get_class_from_str
 import imageio
 
 @torch.no_grad()
-def show_interpolation(diffusion, model, x_1, x_2, steps=100):
+def show_interpolation(diffusion, model, x_1, x_2, steps=100, i=0):
     print("Generating interpolation")
     x_1_latent = diffusion.latent_encoder(x_1[None])
     x_2_latent = diffusion.latent_encoder(x_2[None])
@@ -27,7 +27,7 @@ def show_interpolation(diffusion, model, x_1, x_2, steps=100):
     noise = torch.randn((steps, model.in_channels, *model.size)).to(x_1.device)
     y_s = diffusion.p_decode_loop((steps, model.in_channels, *model.size), interpolations.squeeze(1), x_start=noise)
     y_s = torch.clamp(y_s, 0, 1)
-    video = imageio.get_writer('interpolation.gif', fps=25)
+    video = imageio.get_writer(f'interpolation_{i}.gif', fps=25)
     for y in y_s:
         y = ToPILImage()(y.cpu())
         y = y.resize((64, 64), LANCZOS)
@@ -44,10 +44,9 @@ def show_interpolation(diffusion, model, x_1, x_2, steps=100):
 @click.command()
 @click.option("--config-path", "-c", type=str)
 @click.option("--device", "-d", type=str, default="cuda")
-@click.option("--batch-size", "-b", type=int, default=1)
 @click.option("--checkpoint-path", "-p", type=str)
 @torch.no_grad()
-def sample(config_path, checkpoint_path, batch_size=1, device="cpu"):
+def sample(config_path, checkpoint_path, device="cpu"):
     config = omegaconf.OmegaConf.load(config_path)
 
     model = get_class_from_str(config.model.target)(**config.model.params).to(device)
@@ -68,12 +67,13 @@ def sample(config_path, checkpoint_path, batch_size=1, device="cpu"):
     )
 
 
+    for i, (xs, _) in enumerate(tqdm.tqdm(dataloader)):
+        x_1 = xs[0].to(device)
+        x_2 = xs[1].to(device)
+        show_interpolation(diffusion, model, x_1, x_2, 100, i)
+        if i == 5:
+            break
 
-    mini_batch = next(iter(dataloader))
-    x_1 = mini_batch[0][0].to(device)
-    x_2 = mini_batch[0][1].to(device)
-
-    show_interpolation(diffusion, model, x_1, x_2)
 
 
 

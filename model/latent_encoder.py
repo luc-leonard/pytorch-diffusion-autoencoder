@@ -47,6 +47,7 @@ class LatentEncoder(nn.Module):
             c_in = linear_layers[i - 1]
             head_layers.append(nn.Linear(c_in, linear_layers[i]))
             head_layers.append(nn.Mish())
+            head_layers.append(nn.GroupNorm(32, linear_layers[i]))
             c_out = linear_layers[i]
 
         head_layers.append(nn.Linear(c_out, z_dim))
@@ -65,7 +66,7 @@ class LatentEncoder(nn.Module):
         xs = []
         for layer in self.layers:
             x = layer(x)
-            avg_x = self.avgpool(x)
+            avg_x = x.mean(dim=(2, 3))
             xs.append(avg_x)
 
         x = torch.cat(xs, dim=1).squeeze(-1).squeeze(-1)

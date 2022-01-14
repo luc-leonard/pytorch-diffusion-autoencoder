@@ -7,22 +7,22 @@ model:
     out_channels: 1
     base_hidden_channels: 64
     n_layers: 2
-    chan_multiplier: [1, 2]
-    inner_layers: [2, 2]
-    attention_layers: [False, True]
-    z_dim: 128
+    chan_multiplier: [2, 2]
+    inner_layers: [2, 4]
+    attention_layers: [False, False]
+    z_dim: 512
 
 encoder:
     target: model.latent_encoder.LatentEncoder
     params:
       in_channels: 1
-      base_hidden_channels: 64
+      base_hidden_channels: 128
       n_layers: 2
-      chan_multiplier: [1,2]
-      inner_layers: [1,2]
-      attention_layers: [False, True]
-      z_dim: 128
-      linear_layers: [192, 256, 128]
+      chan_multiplier: [2,2]
+      inner_layers: [2,4]
+      attention_layers: [False, False]
+      z_dim: 512
+      linear_layers: [512, 512]
       dropout: 0.0
 
 diffusion:

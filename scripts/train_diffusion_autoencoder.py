@@ -63,7 +63,7 @@ class Trainer(object):
         self.update_ema_every = 1000
         self.step_start_ema = 10000
         self.grandient_accumulation_steps = config.training.grandient_accumulation_steps
-        self.opt = torch.optim.AdamW(self.diffusion.parameters(), lr=config.training.learning_rate)
+        self.opt = torch.optim.Adam(self.diffusion.parameters(), lr=config.training.learning_rate)
         if config.training.scheduler != 'none':
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.opt, patience=config.training.scheduler.patience, verbose=True)
             print(f"Using scheduler {self.scheduler}")
@@ -75,6 +75,8 @@ class Trainer(object):
 
         if checkpoint_path is not None:
             self.load(checkpoint_path)
+            for param_group in self.opt.param_groups:
+                param_group['lr'] = config.training.learning_rate
         self.reset_parameters()
         self.nb_epochs_to_train = nb_epochs_to_train
         self.sample_every = config.training.sample_every

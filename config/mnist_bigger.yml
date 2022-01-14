@@ -7,9 +7,9 @@ model:
     out_channels: 1
     base_hidden_channels: 64
     n_layers: 2
-    chan_multiplier: [1, 2]
-    inner_layers: [2, 2]
-    attention_layers: [False, True]
+    chan_multiplier: [1, 2, 4]
+    inner_layers: [3, 3]
+    attention_layers: [True, True, True]
     z_dim: 128
 
 encoder:
@@ -17,13 +17,13 @@ encoder:
     params:
       in_channels: 1
       base_hidden_channels: 64
-      n_layers: 2
-      chan_multiplier: [1,2]
-      inner_layers: [1,2]
-      attention_layers: [False, True]
+      n_layers: 4
+      chan_multiplier: [1,2, 2, 4]
+      inner_layers: [3,3,3,3]
+      attention_layers: [False, False, True, True]
       z_dim: 128
       linear_layers: [192, 256, 128]
-      dropout: 0.0
+      dropout: 0.1
 
 diffusion:
   target: model.diffusion.AutoEncoderGaussianDiffusion
@@ -38,8 +38,8 @@ training:
   batch_size: 256
   save_every: 1000
   sample_every: 500
-  grandient_accumulation_steps: 2
-  grad_clip: 1
+  grandient_accumulation_steps: 1
+  grad_clip: 0.1
   ema_decay: 0.995
   fp16: True
 

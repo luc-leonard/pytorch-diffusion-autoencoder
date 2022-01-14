@@ -12,15 +12,15 @@ class ResidualBlock(nn.Module):
 
 
 class ResConvBlock(ResidualBlock):
-    def __init__(self, c_in, c_mid, c_out, is_last=False):
+    def __init__(self, c_in, c_mid, c_out, is_last=False, groups=32):
         skip = None if c_in == c_out else nn.Conv2d(c_in, c_out, 1, bias=False)
         super().__init__(
             [
                 nn.Conv2d(c_in, c_mid, 3, padding=1),
-                nn.GroupNorm(1, c_mid, affine=False),
+                nn.GroupNorm(groups, c_mid, affine=False),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(c_mid, c_out, 3, padding=1),
-                nn.GroupNorm(1, c_out, affine=False) if not is_last else nn.Identity(),
+                nn.GroupNorm(groups, c_out, affine=False) if not is_last else nn.Identity(),
                 nn.ReLU(inplace=True) if not is_last else nn.Identity(),
             ],
             skip,
