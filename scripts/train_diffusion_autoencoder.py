@@ -58,7 +58,8 @@ class Trainer(object):
         self._create_datasets(config)
 
         self.ema = EMA(config.training.ema_decay)
-        self.ema_model = copy.deepcopy(self.model)
+        self.ema_model = copy.deepcopy(self.diffusion)
+
         self.grad_clip = config.training.grad_clip
         self.update_ema_every = 1000
         self.step_start_ema = 10000
@@ -83,7 +84,6 @@ class Trainer(object):
         self.save_every = config.training.save_every
 
         self.add_model_to_tensorboard()
-        print(self.diffusion)
 
         for param_group in self.opt.param_groups:
             param_group['lr'] = config.training.learning_rate
@@ -114,13 +114,13 @@ class Trainer(object):
                                                        shuffle=True, num_workers=4, pin_memory=True)
 
     def reset_parameters(self):
-        self.ema_model.load_state_dict(self.model.state_dict())
+        self.ema_model.load_state_dict(self.diffusion.state_dict())
 
     def step_ema(self, step):
         if step < self.step_start_ema:
             self.reset_parameters()
             return
-        self.ema.update_model_average(self.ema_model, self.model)
+        self.ema.update_model_average(self.ema_model, self.diffusion)
 
     def save(self, step):
         torch.save(
@@ -157,6 +157,7 @@ class Trainer(object):
                 self.scheduler.step(valid_loss)
                 print(f"Scheduler step {self.scheduler.num_bad_epochs}")
             self.current_step = step
+        self.save(step)
 
     def _do_epoch(self, epoch):
         self.diffusion.train()
@@ -194,6 +195,7 @@ class Trainer(object):
                 self.scheduler.step()
 
             if step % self.sample_every == 0:
+                self.step_ema(step)
                 self.sample('train', image[0], step)
                 self.tb_writer.add_image("train/real_image", (image[0] + 1) / 2, step)
             if step % self.save_every == 0:
@@ -225,7 +227,7 @@ class Trainer(object):
     @torch.no_grad()
     def sample(self, stage, x, step):
         self.diffusion.eval()
-        generated, latent = self.diffusion.p_sample_loop((1, self.model.in_channels, *self.model.size), x[None])
+        generated, latent = self.ema_model.p_sample_loop((1, self.model.in_channels, *self.model.size), x[None])
         generated = (generated + 1) / 2
         self.diffusion.train()
         self.tb_writer.add_image(

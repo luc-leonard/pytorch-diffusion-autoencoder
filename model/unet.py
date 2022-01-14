@@ -110,7 +110,7 @@ class UNet(nn.Module):
         for down in self.down:
             x = down(x, embed)
             skips.append(x)
-
+        x = self.middle_layer(x, embed)
         for up, skip in zip(self.up, skips[::-1]):
             x = up(torch.cat([x, skip], dim=1), embed)
 
