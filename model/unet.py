@@ -65,7 +65,8 @@ class UNet(nn.Module):
             c_out=base_hidden_channels * chan_multiplier[-1],
             inner_layers=inner_layers[-1],
             embeddings_dim=timestep_embed + z_dim,
-            cross_attention=cross_attention
+            cross_attention=cross_attention,
+            attention=True
         )
         x_shapes.pop()
         for level in reversed(range(n_layers)):
@@ -110,7 +111,7 @@ class UNet(nn.Module):
         for down in self.down:
             x = down(x, embed)
             skips.append(x)
-        x = self.middle_layer(x, embed)
+        #x = self.middle_layer(x, embed)
         for up, skip in zip(self.up, skips[::-1]):
             x = up(torch.cat([x, skip], dim=1), embed)
 

@@ -148,15 +148,18 @@ class Trainer(object):
     def train(self):
         base_epoch = self.current_epoch
         self.tb_writer.add_text("config", str(self.config))
-        for epoch in range(base_epoch, base_epoch + self.nb_epochs_to_train):
-            step = self._do_epoch(epoch)
-            valid_loss = self._do_valid()
-            self.current_epoch += 1
-            print(f"Epoch {epoch} done, step {step}, valid loss {valid_loss}")
-            if self.scheduler and isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                self.scheduler.step(valid_loss)
-                print(f"Scheduler step {self.scheduler.num_bad_epochs}")
-            self.current_step = step
+        try:
+            for epoch in range(base_epoch, base_epoch + self.nb_epochs_to_train):
+                step = self._do_epoch(epoch)
+                valid_loss = self._do_valid()
+                self.current_epoch += 1
+                print(f"Epoch {epoch} done, step {step}, valid loss {valid_loss}")
+                if self.scheduler and isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    self.scheduler.step(valid_loss)
+                    print(f"Scheduler step {self.scheduler.num_bad_epochs}")
+                self.current_step = step
+        except KeyboardInterrupt:
+            print("Keyboard interrupt")
         self.save(step)
 
     def _do_epoch(self, epoch):
@@ -238,10 +241,11 @@ class Trainer(object):
 @click.command()
 @click.option("--config", "-c")
 @click.option("--name", "-n")
-@click.option("--epochs", "-e", default=500)
+@click.option("--epochs", "-e", default=5000)
 @click.option("--resume-from", "-r", default=None)
 def main(config: str, name: str, resume_from: str, epochs: int):
     _config = omegaconf.OmegaConf.load(config)
+
     Trainer(_config, resume_from, name, epochs).train()
 
 
