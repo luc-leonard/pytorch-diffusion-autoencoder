@@ -2,7 +2,9 @@ import torch
 from torch import nn
 
 from model.modules.embeddings import FourierFeatures
+from model.modules.residual_layers import ResLinearBlock
 from model.modules.unet_layers import UNetLayer
+from utils.torch import expand_to_planes
 
 
 class UNet(nn.Module):
@@ -13,6 +15,7 @@ class UNet(nn.Module):
         base_hidden_channels=128,
         n_layers=4,
         timestep_embed=16,
+        mapping_timestep_embed=128,
         chan_multiplier=[],
         inner_layers=[],
         attention_layers=[],
@@ -25,15 +28,16 @@ class UNet(nn.Module):
         self.size = size
         self.in_channels = in_channels
         self.timestep_embed = FourierFeatures(1, timestep_embed)
+        self.mapping_timestep_embed = FourierFeatures(1, mapping_timestep_embed)
 
         down_layers = []
         up_layers = []
         self.input_projection = UNetLayer(
-            in_channels,
+            in_channels + timestep_embed,
             base_hidden_channels,
             inner_layers=3,
             downsample=False,
-            embeddings_dim=timestep_embed + z_dim,
+            embeddings_dim=z_dim,
             cross_attention=cross_attention,
             attention=False,
             groups=1
@@ -44,6 +48,10 @@ class UNet(nn.Module):
         c_in = base_hidden_channels
         x_shapes = [c_in]
 
+        self.embed_mapping = nn.Sequential(
+            ResLinearBlock(z_dim + mapping_timestep_embed, 1024, 1024),
+            ResLinearBlock(1024, 1024, 1024, is_last=True),
+        )
         for level in range(n_layers):
             print(f'resolution : {current_size} for level {level}. Attentions: {attention_layers[level]}')
             layer = UNetLayer(
@@ -52,7 +60,7 @@ class UNet(nn.Module):
                 inner_layers=inner_layers[level],
                 attention=attention_layers[level],
                 downsample=True,
-                embeddings_dim=timestep_embed + z_dim,
+                embeddings_dim=1024,
                 cross_attention=cross_attention
             )
             c_in = base_hidden_channels * chan_multiplier[level]
@@ -64,7 +72,7 @@ class UNet(nn.Module):
             c_in=base_hidden_channels * chan_multiplier[-1],
             c_out=base_hidden_channels * chan_multiplier[-1],
             inner_layers=inner_layers[-1],
-            embeddings_dim=timestep_embed + z_dim,
+            embeddings_dim=1024,
             cross_attention=cross_attention,
             attention=True
         )
@@ -78,7 +86,7 @@ class UNet(nn.Module):
                 inner_layers=inner_layers[level],
                 attention=attention_layers[level],
                 upsample=True,
-                embeddings_dim=timestep_embed + z_dim,
+                embeddings_dim=1024,
                 cross_attention=cross_attention
             )
             up_layers.append(layer)
@@ -92,7 +100,7 @@ class UNet(nn.Module):
             inner_layers=3,
             upsample=False,
             is_last=True,
-            embeddings_dim=timestep_embed + z_dim,
+            embeddings_dim=1024,
             groups=1,
         )
 
@@ -105,15 +113,19 @@ class UNet(nn.Module):
             timestep = timestep.squeeze(1)
 
         timestep_embed = self.timestep_embed(timestep[:, None])
-        embed = torch.cat([timestep_embed, additional_embed], dim=1)
-        x = self.input_projection(x, embed)
+        mapping_timestep_embed = self.mapping_timestep_embed(timestep[:, None])
+
+        additional_embed = self.embed_mapping(torch.cat([additional_embed, mapping_timestep_embed], dim=1))
+
+        x = torch.cat([x, expand_to_planes(timestep_embed, x.shape)], dim=1)
+        x = self.input_projection(x, additional_embed)
         skips = []
         for down in self.down:
-            x = down(x, embed)
+            x = down(x, additional_embed)
             skips.append(x)
-        #x = self.middle_layer(x, embed)
+        x = self.middle_layer(x, additional_embed)
         for up, skip in zip(self.up, skips[::-1]):
-            x = up(torch.cat([x, skip], dim=1), embed)
+            x = up(torch.cat([x, skip], dim=1), additional_embed)
 
-        x = self.output_projection(x, embed)
+        x = self.output_projection(x, additional_embed)
         return x
