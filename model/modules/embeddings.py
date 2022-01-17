@@ -3,12 +3,9 @@ from torch import nn
 import math
 
 
-class CrossAttention(nn.Module):
-    def __init__(self, in_channels, out_channels, query_size):
-        super(CrossAttention, self).__init__()
-        self.attention = nn.MultiheadAttention(in_channels, in_channels // 64, qd)
-        self.linear_in = nn.Linear(in_channels, out_channels)
-
+class Identity(nn.Module):
+    def forward(self, x, *args):
+        return x
 
 class Modulation2d(nn.Module):
     def __init__(self, feats_in, c_out):
@@ -16,7 +13,7 @@ class Modulation2d(nn.Module):
         self.layer = nn.Linear(feats_in, c_out * 2, bias=False)
 
     def forward(self, input, embed):
-        scales, shifts = self.laye(embed).chunk(2, dim=-1)
+        scales, shifts = self.layer(embed).chunk(2, dim=-1)
         return torch.addcmul(shifts[..., None, None], input, scales[..., None, None] + 1)
 
 

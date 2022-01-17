@@ -1,5 +1,6 @@
 from torch import nn
 
+from model.modules.residual_layers import ResLinearBlock
 from model.modules.unet_layers import UNetLayer
 import torch
 
@@ -45,12 +46,10 @@ class LatentEncoder(nn.Module):
         c_out = base_hidden_channels * chan_multiplier[-1]
         for i in range(1, len(linear_layers)):
             c_in = linear_layers[i - 1]
-            head_layers.append(nn.Linear(c_in, linear_layers[i]))
-            head_layers.append(nn.Mish())
-            head_layers.append(nn.GroupNorm(32, linear_layers[i]))
             c_out = linear_layers[i]
+            head_layers.append(ResLinearBlock(c_in, c_out, c_out))
 
-        head_layers.append(nn.Linear(c_out, z_dim))
+        head_layers.append(ResLinearBlock(c_out, c_out, z_dim))
         self.head = nn.Sequential(*head_layers)
         if dropout > 0:
             self.dropout = nn.Dropout(dropout)

@@ -73,6 +73,7 @@ class Trainer(object):
         self.current_step = 0
         self.current_epoch = 0
         self.fp16 = config.training.fp16
+        self.scaler = torch.cuda.amp.GradScaler()
 
         if checkpoint_path is not None:
             self.load(checkpoint_path)
@@ -87,6 +88,9 @@ class Trainer(object):
 
         for param_group in self.opt.param_groups:
             param_group['lr'] = config.training.learning_rate
+
+        self.min_loss = torch.Tensor([float("inf")]).to(device)
+
 
     def add_model_to_tensorboard(self):
         ...
@@ -128,6 +132,8 @@ class Trainer(object):
                 "model_state_dict": self.diffusion.state_dict(),
                 "optimizer_state_dict": self.opt.state_dict(),
                 "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
+                "min_loss": self.min_loss,
+                "scaler": self.scaler.state_dict(),
                 "step": step,
                 "epoch": self.current_epoch,
             },
@@ -141,9 +147,11 @@ class Trainer(object):
         self.opt.load_state_dict(checkpoint["optimizer_state_dict"])
         if "scheduler_state_dict" in checkpoint and self.scheduler:
             self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+        if self.fp16:
+            self.scaler.load_state_dict(checkpoint["scaler"])
         self.current_step = checkpoint["step"]
         self.current_epoch = checkpoint["epoch"]
-
+        self.min_loss = checkpoint["min_loss"]
 
     def train(self):
         base_epoch = self.current_epoch
@@ -166,32 +174,33 @@ class Trainer(object):
         self.diffusion.train()
         step = self.current_step
         pbar = tqdm.tqdm(self.train_dataloader)
-        scaler = None
-        if self.fp16:
-            scaler = torch.cuda.amp.GradScaler()
+
         for image, _ in pbar:
             image = image.to(device)
             self.opt.zero_grad()
 
             with torch.cuda.amp.autocast(enabled=self.fp16):
                 loss = self.diffusion(image)
+
+            self.min_loss = torch.min(self.min_loss.detach(), loss)
             self.tb_writer.add_scalar("train/loss", loss.item(), step)
+            self.tb_writer.add_scalar("train/min_loss", self.min_loss.item(), step)
             self.tb_writer.add_scalar("train/epoch", epoch, step)
             self.tb_writer.add_scalar("train/lr", self.opt.param_groups[0]["lr"], step)
 
             pbar.set_description(f"{step}: {loss.item():.4f}")
             if self.fp16:
-                scaler.scale(loss).backward()
+                self.scaler.scale(loss).backward()
             else:
                 loss.backward()
 
             if step % self.grandient_accumulation_steps == 0:
                 if self.fp16:
-                    assert scaler
-                    scaler.unscale_(self.opt)
+                    assert self.scaler
+                    self.scaler.unscale_(self.opt)
                     torch.nn.utils.clip_grad_norm_(self.diffusion.parameters(), self.grad_clip)
-                    scaler.step(self.opt)
-                    scaler.update()
+                    self.scaler.step(self.opt)
+                    self.scaler.update()
                 else:
                     self.opt.step()
             if self.scheduler and not isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
@@ -239,11 +248,15 @@ class Trainer(object):
 
 
 @click.command()
-@click.option("--config", "-c")
-@click.option("--name", "-n")
+@click.option("--config", "-c", type=str, required=False)
+@click.option("--name", "-n", type=str, required=True)
 @click.option("--epochs", "-e", default=5000)
 @click.option("--resume-from", "-r", default=None)
-def main(config: str, name: str, resume_from: str, epochs: int):
+@click.option("--resume", default=False, is_flag=True)
+def main(config: str, name: str, resume_from: str, epochs: int, resume: bool):
+    if resume:
+        config = './runs/' + name + '/config.yml'
+        resume_from = './runs/' + name + '/last.pt'
     _config = omegaconf.OmegaConf.load(config)
 
     Trainer(_config, resume_from, name, epochs).train()

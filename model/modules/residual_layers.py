@@ -1,12 +1,12 @@
 from torch import nn
 
-from model.modules.embeddings import Modulation2d
+from model.modules.embeddings import Modulation2d, Identity
 
 
 class ResConvBlock(nn.Module):
     def __init__(self, c_in, c_mid, c_out, is_last=False, groups=32, embeddings_dim=None):
         super().__init__()
-        self.skip = nn.Identity() if c_in == c_out else nn.Conv2d(c_in, c_out, 1, bias=False)
+        self.skip = Identity() if c_in == c_out else nn.Conv2d(c_in, c_out, 1, bias=False)
         self.conv_1 = nn.Conv2d(c_in, c_mid, 3, padding=1)
         self.gn_1 = nn.GroupNorm(groups, c_mid, affine=False)
         if embeddings_dim:
@@ -14,9 +14,9 @@ class ResConvBlock(nn.Module):
         self.act_1 = nn.ReLU(inplace=True)
         self.conv_2 = nn.Conv2d(c_mid, c_out, 3, padding=1)
         if is_last:
-            self.gn_2 = nn.Identity()
-            self.modulation_2 = nn.Identity()
-            self.act_out = nn.Identity()
+            self.gn_2 = Identity()
+            self.modulation_2 = Identity()
+            self.act_out = Identity()
         else:
             self.gn_2 = nn.GroupNorm(groups, c_out, affine=False)
             if embeddings_dim:
@@ -26,12 +26,12 @@ class ResConvBlock(nn.Module):
     def forward(self, input, embedding=None):
         x = self.conv_1(input)
         x = self.gn_1(x)
-        if embedding:
+        if embedding is not None:
             x = self.modulation_1(x, embedding)
         x = self.act_1(x)
         x = self.conv_2(x)
         x = self.gn_2(x)
-        if embedding:
+        if embedding is not None:
             x = self.modulation_2(x, embedding)
         x = self.act_out(x)
         return x + self.skip(input)

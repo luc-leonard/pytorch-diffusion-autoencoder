@@ -17,7 +17,6 @@ class UNetLayer(nn.Module):
         upsample: bool = False,
         is_last=False,
         embeddings_dim=None,
-        cross_attention=False,
         groups=32,
     ):
         super().__init__()
@@ -39,12 +38,16 @@ class UNetLayer(nn.Module):
             layers.append(
                 nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False)
             )
-        self.main = nn.Sequential(*layers)
+        self.main = nn.ModuleList(layers)
 
     def forward(self, x, embeddings=None):
         if self.downsample:
             x = self.avgpool(x)
 
-        x = self.conv_in(x)
-        x = self.main(x)
+        x = self.conv_in(x, embeddings)
+        for layer in self.main:
+            if isinstance(layer, ResConvBlock):
+                x = layer(x, embeddings)
+            else:
+                x = layer(x)
         return x

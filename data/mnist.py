@@ -1,4 +1,5 @@
 import torchvision
+from torch.nn import Upsample
 from torch.utils.data import Dataset, ConcatDataset
 from torchvision.transforms import ToTensor
 
@@ -14,4 +15,5 @@ class MNIST(Dataset):
 
     def __getitem__(self, index):
         sample = self.ds[index]
-        return ToTensor()(sample[0]), sample[1]
+        image = sample[0].resize((32, 32))
+        return ToTensor()(image), sample[1]
