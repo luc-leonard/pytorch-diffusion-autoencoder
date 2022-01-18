@@ -66,8 +66,8 @@ loss = diffusion(training_images)
 loss.backward()
 # after a lot of training
 
-image = torch.randn(3,28, 28) 
+image = torch.randn(3, 1, 28, 28) 
 result, latent = diffusion.p_sample_loop((1, model.in_channels, *model.size), image)
-result.shape # (3, 28, 28)
-latent.shape # (1, 128)
+result.shape # (3, 1, 28, 28)
+latent.shape # (3, 128)
 ```

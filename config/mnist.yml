@@ -2,48 +2,47 @@ model:
   target: model.unet.UNet
   params:
     timestep_embed: 16
-    size: [32, 32]
+    size: [28, 28]
     in_channels: 1
     out_channels: 1
     base_hidden_channels: 64
-    n_layers: 3
-    inner_layers: [3,5,5]
-    chan_multiplier: [1,2,4]
-    attention_layers: [False, True, True]
+    n_layers: 2
+    inner_layers: [3,3]
+    chan_multiplier: [1,2]
+    attention_layers: [False, True]
     z_dim: 256
 
 encoder:
-    target: model.latent_encoder.LatentEncoder
-    params:
-      in_channels: 1
-      base_hidden_channels: 64
-      n_layers: 4
-      chan_multiplier: [1,2,4,4]
-      inner_layers: [3,3,5,5]
-      linear_layers: [704, 512, 256]
-      attention_layers: [False, False, True, True]
-      z_dim: 256
-      dropout: 0.1
+  target: model.latent_encoder.LatentEncoder
+  params:
+    in_channels: 1
+    base_hidden_channels: 64
+    n_layers: 3
+    chan_multiplier: [1,2,4]
+    inner_layers: [3,3,3]
+    linear_layers: [448, 512, 256]
+    attention_layers: [False, True, False]
+    z_dim: 256
+    dropout: 0.1
 
 diffusion:
   target: model.diffusion.AutoEncoderGaussianDiffusion
   params:
-    image_size: 32
+    image_size: 28
     timesteps: 1000
-
 
 training:
   scheduler: none
-  learning_rate: 1e-4
+  learning_rate: 0.0001
   batch_size: 256
   save_every: 1000
   sample_every: 500
   grandient_accumulation_steps: 1
   grad_clip: 0.1
   ema_decay: 0.995
-  fp16: True
+  fp16: true
 
 data:
-  target: data.mnist.MNIST
+  target: data.mnist.QMNIST
   params:
-    root: /media/lleonard/big_slow_disk/datasets/mnist
+    root: /media/lleonard/big_slow_disk/datasets/qmnist

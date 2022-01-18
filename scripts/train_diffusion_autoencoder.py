@@ -7,6 +7,7 @@ import omegaconf
 import torch
 import torchvision.datasets
 import tqdm
+from omegaconf import OmegaConf
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.config import get_class_from_str, number_of_params
@@ -26,7 +27,7 @@ LOGGER.info("LOG SYSTEM: Started")
 device = "cuda"
 
 
-class EMA():
+class EMA:
     def __init__(self, beta):
         super().__init__()
         self.beta = beta
@@ -72,6 +73,7 @@ class Trainer(object):
             self.scheduler = None
         self.current_step = 0
         self.current_epoch = 0
+        self.shown_images = 0
         self.fp16 = config.training.fp16
         self.scaler = torch.cuda.amp.GradScaler()
 
@@ -99,9 +101,9 @@ class Trainer(object):
 
     def _create_models(self, config):
         self.model = get_class_from_str(config.model.target)(**config.model.params).to(device)
-        print(f'model has {number_of_params(self.model):,} trainable parameters')
+        LOGGER.info(f'model has {number_of_params(self.model):,} trainable parameters')
         self.encoder = get_class_from_str(config.encoder.target)(**config.encoder.params).to(device)
-        print(f'encoder has {number_of_params(self.encoder):,} trainable parameters')
+        LOGGER.info(f'encoder has {number_of_params(self.encoder):,} trainable parameters')
         self.diffusion = get_class_from_str(config.diffusion.target)(
             self.model, **config.diffusion.params, latent_encoder=self.encoder
         ).to(device)
@@ -136,12 +138,13 @@ class Trainer(object):
                 "scaler": self.scaler.state_dict(),
                 "step": step,
                 "epoch": self.current_epoch,
+                "shown_images": self.shown_images,
             },
             str(Path(self.run_path) / f"diffusion_{step}.pt")),
         shutil.copy(Path(self.run_path) / f"diffusion_{step}.pt", Path(self.run_path) / "last.pt")
 
     def load(self, checkpoint_path):
-        print(f"Resuming from {checkpoint_path}")
+        LOGGER.info(f"Resuming from {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path)
         self.diffusion.load_state_dict(checkpoint["model_state_dict"], strict=True)
         self.opt.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -149,25 +152,30 @@ class Trainer(object):
             self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         if self.fp16:
             self.scaler.load_state_dict(checkpoint["scaler"])
+        if "shown_images" in checkpoint:
+            self.shown_images = checkpoint["shown_images"]
+
         self.current_step = checkpoint["step"]
         self.current_epoch = checkpoint["epoch"]
         self.min_loss = checkpoint["min_loss"]
 
     def train(self):
         base_epoch = self.current_epoch
-        self.tb_writer.add_text("config", str(self.config))
+        conf_yaml = OmegaConf.to_yaml(self.config)
+        self.tb_writer.add_text("config", conf_yaml.replace('\n', '  \n'), 0) # line return are markdown format
+        (Path(self.run_path) / 'config.yml').write_text(conf_yaml)
         try:
             for epoch in range(base_epoch, base_epoch + self.nb_epochs_to_train):
                 step = self._do_epoch(epoch)
                 valid_loss = self._do_valid()
                 self.current_epoch += 1
-                print(f"Epoch {epoch} done, step {step}, valid loss {valid_loss}")
+                LOGGER.info(f"Epoch {epoch} done, step {step}, valid loss {valid_loss}")
                 if self.scheduler and isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                     self.scheduler.step(valid_loss)
                     print(f"Scheduler step {self.scheduler.num_bad_epochs}")
                 self.current_step = step
         except KeyboardInterrupt:
-            print("Keyboard interrupt")
+            LOGGER.info("Keyboard interrupt")
         self.save(step)
 
     def _do_epoch(self, epoch):
@@ -178,13 +186,14 @@ class Trainer(object):
         for image, _ in pbar:
             image = image.to(device)
             self.opt.zero_grad()
-
+            self.shown_images = self.shown_images + image.shape[0]
             with torch.cuda.amp.autocast(enabled=self.fp16):
                 loss = self.diffusion(image)
 
-            self.min_loss = torch.min(self.min_loss.detach(), loss)
+            self.min_loss = torch.min(self.min_loss.detach(), loss.detach())
             self.tb_writer.add_scalar("train/loss", loss.item(), step)
             self.tb_writer.add_scalar("train/min_loss", self.min_loss.item(), step)
+            self.tb_writer.add_scalar("train/potential", loss.detach() - self.min_loss, step)
             self.tb_writer.add_scalar("train/epoch", epoch, step)
             self.tb_writer.add_scalar("train/lr", self.opt.param_groups[0]["lr"], step)
 

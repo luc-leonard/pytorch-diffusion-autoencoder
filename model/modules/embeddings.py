@@ -7,6 +7,7 @@ class Identity(nn.Module):
     def forward(self, x, *args):
         return x
 
+
 class Modulation2d(nn.Module):
     def __init__(self, feats_in, c_out):
         super().__init__()
@@ -16,6 +17,15 @@ class Modulation2d(nn.Module):
         scales, shifts = self.layer(embed).chunk(2, dim=-1)
         return torch.addcmul(shifts[..., None, None], input, scales[..., None, None] + 1)
 
+
+class SimpleModulation2d(nn.Module):
+    def __init__(self, feats_in, c_out):
+        super().__init__()
+        self.layer = nn.Linear(feats_in, c_out, bias=False)
+
+    def forward(self, input, embed):
+        embed = self.layer(embed)
+        return input + embed
 
 class FourierFeatures(nn.Module):
     def __init__(self, in_features, out_features, std=1.0):
