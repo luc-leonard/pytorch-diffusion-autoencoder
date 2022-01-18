@@ -185,17 +185,15 @@ class Trainer(object):
 
         for image, _ in pbar:
             image = image.to(device)
-            self.opt.zero_grad()
             self.shown_images = self.shown_images + image.shape[0]
+
+            if step % self.grandient_accumulation_steps == 0:
+                self.opt.zero_grad()
+
             with torch.cuda.amp.autocast(enabled=self.fp16):
                 loss = self.diffusion(image)
 
-            self.min_loss = torch.min(self.min_loss.detach(), loss.detach())
-            self.tb_writer.add_scalar("train/loss", loss.item(), step)
-            self.tb_writer.add_scalar("train/min_loss", self.min_loss.item(), step)
-            self.tb_writer.add_scalar("train/potential", loss.detach() - self.min_loss, step)
-            self.tb_writer.add_scalar("train/epoch", epoch, step)
-            self.tb_writer.add_scalar("train/lr", self.opt.param_groups[0]["lr"], step)
+            self.log_step(epoch, loss, step)
 
             pbar.set_description(f"{step}: {loss.item():.4f}")
             if self.fp16:
@@ -224,6 +222,14 @@ class Trainer(object):
                 self.save(step)
             step = step + 1
         return step
+
+    def log_step(self, epoch, loss, step):
+        self.min_loss = torch.min(self.min_loss.detach(), loss.detach())
+        self.tb_writer.add_scalar("train/loss", loss.item(), step)
+        self.tb_writer.add_scalar("train/min_loss", self.min_loss.item(), step)
+        self.tb_writer.add_scalar("train/potential", loss.detach() - self.min_loss, step)
+        self.tb_writer.add_scalar("train/epoch", epoch, step)
+        self.tb_writer.add_scalar("train/lr", self.opt.param_groups[0]["lr"], step)
 
     @torch.no_grad()
     def _do_valid(self):

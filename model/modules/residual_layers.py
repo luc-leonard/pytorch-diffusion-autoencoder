@@ -3,37 +3,42 @@ from torch import nn
 from model.modules.embeddings import Modulation2d, Identity
 
 
+# cf appendix A
 class ResConvBlock(nn.Module):
-    def __init__(self, c_in, c_mid, c_out, is_last=False, groups=32, embeddings_dim=None):
+    def __init__(self, c_in, c_mid, c_out, is_last=False, groups=32, timestep_embedding=None, embeddings_dim=None):
         super().__init__()
         self.skip = Identity() if c_in == c_out else nn.Conv2d(c_in, c_out, 1, bias=False)
-        self.conv_1 = nn.Conv2d(c_in, c_mid, 3, padding=1)
-        self.gn_1 = nn.GroupNorm(groups, c_mid, affine=False)
-        if embeddings_dim:
-            self.modulation_1 = Modulation2d(embeddings_dim, c_mid)
-        self.act_1 = nn.ReLU(inplace=True)
-        self.conv_2 = nn.Conv2d(c_mid, c_out, 3, padding=1)
-        if is_last:
-            self.gn_2 = Identity()
-            self.modulation_2 = Identity()
-            self.act_out = Identity()
-        else:
-            self.gn_2 = nn.GroupNorm(groups, c_out, affine=False)
-            if embeddings_dim:
-                self.modulation_2 = Modulation2d(embeddings_dim, c_out)
-            self.act_out = nn.ReLU(inplace=True)
 
-    def forward(self, input, embedding=None):
-        x = self.conv_1(input)
-        x = self.gn_1(x)
-        if embedding is not None:
-            x = self.modulation_1(x, embedding)
-        x = self.act_1(x)
-        x = self.conv_2(x)
+        self.gn_1 = nn.GroupNorm(groups, c_in)
+        self.silu = nn.SiLU(inplace=True)
+        self.dropout = nn.Dropout(p=0.1)
+        self.conv_1 = nn.Conv2d(c_in, c_mid, 3, padding=1)
+        self.gn_2 = nn.GroupNorm(groups, c_mid, affine=False)
+
+        if timestep_embedding:
+            self.modulation_1 = Modulation2d(timestep_embedding, c_mid)
+        if embeddings_dim:
+            self.embedding_mlp = nn.Linear(embeddings_dim, c_mid)
+
+        self.conv_2 = nn.Conv2d(c_mid, c_out, 3, padding=1)
+
+
+    def forward(self, input, t=None, embedding=None):
+        x = self.gn_1(input)
+        x = self.silu(x)
+        x = self.conv_1(x)
         x = self.gn_2(x)
+
+        if t is not None:
+            x = self.modulation_1(x, t)
+
         if embedding is not None:
-            x = self.modulation_2(x, embedding)
-        x = self.act_out(x)
+            embedding = self.embedding_mlp(embedding)[:, :, None, None]
+            x = x * embedding
+
+        x = self.silu(x)
+        x = self.dropout(x)
+        x = self.conv_2(x)
         return x + self.skip(input)
 
 

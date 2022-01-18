@@ -22,7 +22,7 @@ class LatentEncoder(nn.Module):
         super(LatentEncoder, self).__init__()
         print('LatentEncoder')
         self.input_projection = UNetLayer(
-            in_channels, base_hidden_channels, inner_layers=3, downsample=False
+            in_channels, base_hidden_channels, inner_layers=3, downsample=False, groups=1
         )
 
         down_layers = []
@@ -35,6 +35,7 @@ class LatentEncoder(nn.Module):
                 inner_layers=inner_layers[level],
                 attention=attention_layers[level],
                 downsample=True,
+                groups=32,
             )
             down_layers.append(layer)
             c_in = base_hidden_channels * chan_multiplier[level]

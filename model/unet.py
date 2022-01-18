@@ -35,21 +35,17 @@ class UNet(nn.Module):
 
         # embedding layers
         self.timestep_embed = FourierFeatures(1, timestep_embed)
-        self.mapping_timestep_embed = FourierFeatures(1, mapping_timestep_embed)
-        self.embed_mapping = nn.Sequential(
-            ResLinearBlock(z_dim + mapping_timestep_embed, 512, 512),
-            ResLinearBlock(512, 512, 512, is_last=True),
-        )
 
 
         down_layers = []
         up_layers = []
         self.input_projection = UNetLayer(
-            in_channels + timestep_embed,
+            in_channels,
             base_hidden_channels,
             inner_layers=3,
             downsample=False,
-            embeddings_dim=512,
+            embeddings_dim=z_dim,
+            timestep_embeddings=timestep_embed,
             attention=False,
             groups=1
         )
@@ -67,7 +63,8 @@ class UNet(nn.Module):
                 inner_layers=inner_layers[level],
                 attention=attention_layers[level],
                 downsample=True,
-                embeddings_dim=512,
+                embeddings_dim=z_dim,
+                timestep_embeddings=timestep_embed,
             )
             c_in = base_hidden_channels * chan_multiplier[level]
             x_shapes.append(c_in)
@@ -78,7 +75,8 @@ class UNet(nn.Module):
             c_in=base_hidden_channels * chan_multiplier[-1],
             c_out=base_hidden_channels * chan_multiplier[-1],
             inner_layers=inner_layers[-1],
-            embeddings_dim=512,
+            embeddings_dim=z_dim,
+            timestep_embeddings=timestep_embed,
             attention=True,
             downsample=False,
             upsample=False
@@ -93,7 +91,8 @@ class UNet(nn.Module):
                 inner_layers=inner_layers[level],
                 attention=attention_layers[level],
                 upsample=True,
-                embeddings_dim=512,
+                embeddings_dim=z_dim,
+                timestep_embeddings=timestep_embed,
             )
             up_layers.append(layer)
 
@@ -106,8 +105,9 @@ class UNet(nn.Module):
             inner_layers=3,
             upsample=False,
             is_last=True,
-            embeddings_dim=512,
+            embeddings_dim=z_dim,
             groups=1,
+            timestep_embeddings=timestep_embed,
         )
 
         with torch.no_grad():
@@ -119,23 +119,20 @@ class UNet(nn.Module):
             timestep = timestep.squeeze(1)
 
         timestep_embed = self.timestep_embed(timestep[:, None])
-        mapping_timestep_embed = self.mapping_timestep_embed(timestep[:, None])
 
-        additional_embed = self.embed_mapping(torch.cat([additional_embed, mapping_timestep_embed], dim=1))
-
-        x = torch.cat([x, expand_to_planes(timestep_embed, x.shape)], dim=1)
-        x = self.input_projection(x, additional_embed)
+        #x = torch.cat([x, expand_to_planes(timestep_embed, x.shape)], dim=1)
+        x = self.input_projection(x, timestep_embed, additional_embed)
         skips = []
         LOGGER.debug('before down', x.shape)
         for down in self.down:
-            x = down(x, additional_embed)
+            x = down(x, timestep_embed, additional_embed)
             skips.append(x)
             LOGGER.debug(x.shape)
-        x = self.middle_layer(x, additional_embed)
+        x = self.middle_layer(x, timestep_embed, additional_embed)
         LOGGER.debug('after mid', x.shape)
         for up, skip in zip(self.up, skips[::-1]):
             LOGGER.debug(x.shape, skip.shape)
-            x = up(torch.cat([x, skip], dim=1), additional_embed)
+            x = up(torch.cat([x, skip], dim=1), timestep_embed, additional_embed)
 
-        x = self.output_projection(x, additional_embed)
+        x = self.output_projection(x, timestep_embed, additional_embed)
         return x

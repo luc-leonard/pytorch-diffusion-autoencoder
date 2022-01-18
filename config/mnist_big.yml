@@ -47,3 +47,4 @@ data:
   target: data.mnist.QMNIST
   params:
     root: /media/lleonard/big_slow_disk/datasets/qmnist
+    size: [32, 32]
