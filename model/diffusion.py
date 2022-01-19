@@ -149,6 +149,10 @@ class AutoEncoderGaussianDiffusion(GaussianDiffusion):
         return img, latent
 
     @torch.no_grad()
+    def encode(self, x):
+        return self.latent_encoder(x)
+
+    @torch.no_grad()
     def p_decode_loop(self, shape, latent, x_start=None):
         device = self.betas.device
         b = shape[0]

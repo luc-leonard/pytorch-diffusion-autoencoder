@@ -2,6 +2,7 @@ from torch import nn
 
 from model.modules.attention import SelfAttention2d
 from model.modules.residual_layers import ResConvBlock
+from model.modules.up_down_sample import Downsample, Upsample
 
 
 class UNetLayer(nn.Module):
@@ -23,7 +24,7 @@ class UNetLayer(nn.Module):
 
         self.downsample = downsample
         if downsample:
-            self.avgpool = nn.AvgPool2d(2)
+            self.down = Downsample(c_in)
 
         self.conv_in = ResConvBlock(c_in, c_out, c_out, is_last, groups, timestep_embeddings, embeddings_dim)
         if attention:
@@ -34,14 +35,12 @@ class UNetLayer(nn.Module):
                 layers.append(SelfAttention2d(c_out, c_out // 64))
 
         if upsample:
-            layers.append(
-                nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False)
-            )
+            layers.append(Upsample(c_out))
         self.main = nn.ModuleList(layers)
 
     def forward(self, x, t=None, embeddings=None):
         if self.downsample:
-            x = self.avgpool(x)
+            x = self.down(x)
 
         x = self.conv_in(x, t, embeddings)
         for layer in self.main:

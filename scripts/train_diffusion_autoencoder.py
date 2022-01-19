@@ -132,6 +132,7 @@ class Trainer(object):
         torch.save(
             {
                 "model_state_dict": self.diffusion.state_dict(),
+                "ema_model_state_dict": self.ema_model.state_dict(),
                 "optimizer_state_dict": self.opt.state_dict(),
                 "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
                 "min_loss": self.min_loss,
@@ -187,29 +188,17 @@ class Trainer(object):
             image = image.to(device)
             self.shown_images = self.shown_images + image.shape[0]
 
-            if step % self.grandient_accumulation_steps == 0:
-                self.opt.zero_grad()
-
             with torch.cuda.amp.autocast(enabled=self.fp16):
                 loss = self.diffusion(image)
 
             self.log_step(epoch, loss, step)
-
             pbar.set_description(f"{step}: {loss.item():.4f}")
-            if self.fp16:
-                self.scaler.scale(loss).backward()
-            else:
-                loss.backward()
+            self.backward(loss)
 
             if step % self.grandient_accumulation_steps == 0:
-                if self.fp16:
-                    assert self.scaler
-                    self.scaler.unscale_(self.opt)
-                    torch.nn.utils.clip_grad_norm_(self.diffusion.parameters(), self.grad_clip)
-                    self.scaler.step(self.opt)
-                    self.scaler.update()
-                else:
-                    self.opt.step()
+                self.optimizer_step()
+                self.opt.zero_grad()
+
             if self.scheduler and not isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                 self.scheduler.step()
 
@@ -222,6 +211,22 @@ class Trainer(object):
                 self.save(step)
             step = step + 1
         return step
+
+    def optimizer_step(self):
+        if self.fp16:
+            assert self.scaler
+            self.scaler.unscale_(self.opt)
+            torch.nn.utils.clip_grad_norm_(self.diffusion.parameters(), self.grad_clip)
+            self.scaler.step(self.opt)
+            self.scaler.update()
+        else:
+            self.opt.step()
+
+    def backward(self, loss):
+        if self.fp16:
+            self.scaler.scale(loss).backward()
+        else:
+            loss.backward()
 
     def log_step(self, epoch, loss, step):
         self.min_loss = torch.min(self.min_loss.detach(), loss.detach())

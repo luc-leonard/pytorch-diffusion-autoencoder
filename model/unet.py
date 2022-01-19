@@ -120,7 +120,6 @@ class UNet(nn.Module):
 
         timestep_embed = self.timestep_embed(timestep[:, None])
 
-        #x = torch.cat([x, expand_to_planes(timestep_embed, x.shape)], dim=1)
         x = self.input_projection(x, timestep_embed, additional_embed)
         skips = []
         LOGGER.debug('before down', x.shape)
