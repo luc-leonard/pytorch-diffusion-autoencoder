@@ -4,10 +4,7 @@ import torch
 from torch import nn
 
 from model.modules.embeddings import FourierFeatures
-from model.modules.residual_layers import ResLinearBlock
 from model.modules.unet_layers import UNetLayer
-from utils.torch import expand_to_planes
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -49,7 +46,6 @@ class UNet(nn.Module):
             attention=False,
             groups=1
         )
-
 
         current_size = size[0]
         c_in = base_hidden_channels

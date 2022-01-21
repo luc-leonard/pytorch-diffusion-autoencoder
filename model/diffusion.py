@@ -150,13 +150,19 @@ class AutoEncoderGaussianDiffusion(GaussianDiffusion):
 
     @torch.no_grad()
     def encode(self, x):
-        return self.latent_encoder(x)
+        return self.latent_encoder(x), self.q_sample(x_start=x,
+                                                     t=torch.full((1,), self.num_timesteps, device=self.betas.device, dtype=torch.long),
+                                                     noise=None)
 
     @torch.no_grad()
     def p_decode_loop(self, shape, latent, x_start=None):
         device = self.betas.device
         b = shape[0]
-        img = x_start if x_start is not None else torch.randn(shape, device=device)
+        #img = x_start if x_start is not None else torch.randn(shape, device=device)
+        img = self.q_sample(x_start=x_start,
+                      t=torch.full((1,), self.num_timesteps, device=self.betas.device, dtype=torch.long),
+                      noise=None)
+
         for i in tqdm(
             reversed(range(0, self.num_timesteps)),
             desc="sampling loop time step",

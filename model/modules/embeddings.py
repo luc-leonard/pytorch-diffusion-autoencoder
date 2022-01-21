@@ -1,6 +1,7 @@
+import math
+
 import torch
 from torch import nn
-import math
 
 
 class Identity(nn.Module):
@@ -8,24 +9,34 @@ class Identity(nn.Module):
         return x
 
 
+# too lazy to use it. would need to retrain.
 class AdaptiveGroupNormalization(nn.Module):
     def __init__(self, input_channels, timestep_channels, embedding_dim):
         super(AdaptiveGroupNormalization, self).__init__()
-        self.embeddings_mlp = nn.Linear(embedding_dim, input_channels)
-        self.timestep_modulation = Modulation2d(timestep_channels, input_channels)
+        self.z_mlp = nn.Sequential(
+            nn.Linear(embedding_dim, embedding_dim),
+            nn.SiLU(),
+            nn.Linear(embedding_dim, input_channels),
+            nn.SiLU(),
+            nn.Linear(input_channels, input_channels),
+        )
+        self.t_mlp = nn.Sequential(nn.Linear(timestep_channels, input_channels * 2), nn.SiLU())
 
     def forward(self, x, t, embeddings):
         embeddings = self.embeddings_mlp(embeddings)
-        x = self.timestep_modulation(x, t)
-        x = x * embeddings
+        t_scale, t_shift = self.layer(t).chunk(2, dim=-1)
+        torch.addcmul(t_shift[..., None, None], x, t_scale[..., None, None] + 1)  # x = (x * t_shift) + t_scale
+        x = x * embeddings  # x = z((x * t_shift) + t_scale)
         return x
 
 
 class Modulation2d(nn.Module):
     def __init__(self, feats_in, c_out):
-        from model.modules.residual_layers import ResLinearBlock
         super().__init__()
-        self.layer = ResLinearBlock(feats_in, c_out, c_out * 2, is_last=True)
+        self.layer = nn.Sequential(
+            nn.Linear(feats_in, c_out * 2),
+            nn.SiLU()
+        )
 
     def forward(self, input, embed):
         scales, shifts = self.layer(embed).chunk(2, dim=-1)

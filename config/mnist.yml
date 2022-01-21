@@ -34,11 +34,12 @@ diffusion:
 training:
   scheduler: none
   learning_rate: 1e-4
+  encoder_learning_rate: 1e-3
   batch_size: 256
   save_every: 1000
   sample_every: 500
   grandient_accumulation_steps: 1
-  grad_clip: 0.1
+  grad_clip: 1
   ema_decay: 0.995
   fp16: true
 

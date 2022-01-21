@@ -1,4 +1,5 @@
 import copy
+import os
 import shutil
 from pathlib import Path
 
@@ -12,6 +13,12 @@ from torch.utils.tensorboard import SummaryWriter
 
 from utils.config import get_class_from_str, number_of_params
 import logging
+
+
+
+
+OUT_DIR = os.getenv("OUT_DIR", "./runs/")
+
 
 def init_logger():
     logger = logging.getLogger()
@@ -53,7 +60,7 @@ class Trainer(object):
     ):
         super().__init__()
         self.config = config
-        self.run_path = f"runs/{name}"
+        self.run_path = f"{OUT_DIR}/{name}"
         self.tb_writer = SummaryWriter(self.run_path)
         self._create_models(config)
         self._create_datasets(config)
@@ -147,8 +154,9 @@ class Trainer(object):
     def load(self, checkpoint_path):
         LOGGER.info(f"Resuming from {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path)
-        self.diffusion.load_state_dict(checkpoint["model_state_dict"], strict=True)
-        self.opt.load_state_dict(checkpoint["optimizer_state_dict"])
+        errs = self.diffusion.load_state_dict(checkpoint["model_state_dict"], strict=False)
+        print(errs)
+        #self.opt.load_state_dict(checkpoint["optimizer_state_dict"])
         if "scheduler_state_dict" in checkpoint and self.scheduler:
             self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         if self.fp16:
@@ -190,7 +198,9 @@ class Trainer(object):
 
             with torch.cuda.amp.autocast(enabled=self.fp16):
                 loss = self.diffusion(image)
-
+            if torch.isnan(loss):
+                LOGGER.warn("NaN loss, reloading last good checkpoint")
+                self.load(Path(self.run_path) / "last.pt")
             self.log_step(epoch, loss, step)
             pbar.set_description(f"{step}: {loss.item():.4f}")
             self.backward(loss)
@@ -259,12 +269,14 @@ class Trainer(object):
     @torch.no_grad()
     def sample(self, stage, x, step):
         self.diffusion.eval()
-        generated, latent = self.ema_model.p_sample_loop((1, self.model.in_channels, *self.model.size), x[None])
+        generated, latent = self.diffusion.p_sample_loop((1, self.model.in_channels, *self.model.size), x[None])
         generated = (generated + 1) / 2
+        original = (x + 1) / 2
         self.diffusion.train()
         self.tb_writer.add_image(
             f"{stage}/image", torchvision.utils.make_grid(generated, nrow=3), step
         )
+
 
 
 @click.command()
@@ -275,8 +287,8 @@ class Trainer(object):
 @click.option("--resume", default=False, is_flag=True)
 def main(config: str, name: str, resume_from: str, epochs: int, resume: bool):
     if resume:
-        config = './runs/' + name + '/config.yml'
-        resume_from = './runs/' + name + '/last.pt'
+        config = OUT_DIR + name + '/config.yml'
+        resume_from = OUT_DIR + name + '/last.pt'
     _config = omegaconf.OmegaConf.load(config)
 
     Trainer(_config, resume_from, name, epochs).train()

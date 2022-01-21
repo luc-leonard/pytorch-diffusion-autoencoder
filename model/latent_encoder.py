@@ -1,9 +1,12 @@
+import logging
+
 from torch import nn
 
-from model.modules.residual_layers import ResLinearBlock
 from model.modules.unet_layers import UNetLayer
 import torch
 
+
+LOGGER = logging.getLogger(__name__)
 
 class LatentEncoder(nn.Module):
     def __init__(
@@ -20,7 +23,6 @@ class LatentEncoder(nn.Module):
         linear_layers=[]
     ):
         super(LatentEncoder, self).__init__()
-        print('LatentEncoder')
         self.input_projection = UNetLayer(
             in_channels, base_hidden_channels, inner_layers=3, downsample=False, groups=1
         )
@@ -28,7 +30,7 @@ class LatentEncoder(nn.Module):
         down_layers = []
         c_in = base_hidden_channels
         for level in range(n_layers):
-            print(f'level {level}. Attentions: {attention_layers[level]}')
+            LOGGER.info(f'level {level}. Attentions: {attention_layers[level]}')
             layer = UNetLayer(
                 c_in,
                 base_hidden_channels * chan_multiplier[level],
@@ -44,13 +46,14 @@ class LatentEncoder(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
         head_layers = []
-        c_out = base_hidden_channels * chan_multiplier[-1]
         for i in range(1, len(linear_layers)):
             c_in = linear_layers[i - 1]
             c_out = linear_layers[i]
-            head_layers.append(ResLinearBlock(c_in, c_out, c_out))
+            head_layers.append(nn.Linear(c_in, c_out))
+            head_layers.append(nn.SiLU(inplace=True))
 
-        head_layers.append(ResLinearBlock(c_out, c_out, z_dim))
+        head_layers.append(nn.Linear(c_out, z_dim))
+        head_layers.append(nn.SiLU(inplace=True))
         self.head = nn.Sequential(*head_layers)
         if dropout > 0:
             self.dropout = nn.Dropout(dropout)

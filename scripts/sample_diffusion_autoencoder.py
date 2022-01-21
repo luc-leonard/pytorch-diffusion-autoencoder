@@ -18,13 +18,13 @@ import imageio
 @torch.no_grad()
 def show_interpolation(diffusion, model, x_1, x_2, steps=100, i=0):
     print("Generating interpolation")
-    x_1_latent = diffusion.latent_encoder(x_1[None])
-    x_2_latent = diffusion.latent_encoder(x_2[None])
+    x_1_latent, x1_noisy = diffusion.latent_encoder(x_1[None])
+    x_2_latent, x2_noisy = diffusion.latent_encoder(x_2[None])
 
 
     interpolations = torch.stack([torch.lerp(x_1_latent, x_2_latent, t) for t in torch.linspace(0, 1, steps=steps).to(x_1.device)]).squeeze(1)
 
-    noise = torch.randn((steps, model.in_channels, *model.size)).to(x_1.device)
+    noise = x1_noisy #torch.randn((steps, model.in_channels, *model.size)).to(x_1.device)
     y_s = diffusion.p_decode_loop((steps, model.in_channels, *model.size), interpolations.squeeze(1), x_start=noise)
     y_s = torch.clamp(y_s, 0, 1)
     video = imageio.get_writer(f'interpolation_{i}.gif', fps=25)
@@ -56,7 +56,7 @@ def sample(config_path, checkpoint_path, device="cpu"):
     ).to(device)
     print(f"Resuming from {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path, map_location=device)
-    diffusion.load_state_dict(checkpoint["ema_model_state_dict"], strict=False)
+    diffusion.load_state_dict(checkpoint["ema_model_state_dict"], strict=True)
 
     model.eval()
     dataset = DatasetWrapper(

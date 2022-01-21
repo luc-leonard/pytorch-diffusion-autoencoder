@@ -18,7 +18,13 @@ class ResConvBlock(nn.Module):
         if timestep_embedding:
             self.modulation_1 = Modulation2d(timestep_embedding, c_mid)
         if embeddings_dim:
-            self.embedding_mlp = ResLinearBlock(embeddings_dim, c_mid, c_mid, is_last=True)
+            self.z_mlp = nn.Sequential(
+                nn.Linear(embeddings_dim, embeddings_dim),
+                nn.SiLU(inplace=True),
+                nn.Linear(embeddings_dim, c_mid),
+                nn.SiLU(inplace=True),
+                nn.Linear(c_mid, c_mid),
+            )
 
         self.conv_2 = nn.Conv2d(c_mid, c_out, 3, padding=1)
 
@@ -32,31 +38,10 @@ class ResConvBlock(nn.Module):
         if t is not None:
             x = self.modulation_1(x, t)
         if embedding is not None:
-            embedding = self.embedding_mlp(embedding)[:, :, None, None]
+            embedding = self.z_mlp(embedding)[:, :, None, None]
             x = x * embedding
 
         x = self.silu(x)
         x = self.dropout(x)
         x = self.conv_2(x)
         return x + self.skip(input)
-
-
-class ResidualBlock(nn.Module):
-    def __init__(self, main, skip=None):
-        super().__init__()
-        self.main = nn.Sequential(*main)
-        self.skip = skip if skip else nn.Identity()
-
-    def forward(self, input):
-        return self.main(input) + self.skip(input)
-
-
-class ResLinearBlock(ResidualBlock):
-    def __init__(self, f_in, f_mid, f_out, is_last=False):
-        skip = None if f_in == f_out else nn.Linear(f_in, f_out, bias=False)
-        super().__init__([
-            nn.Linear(f_in, f_mid),
-            nn.SiLU(inplace=True),
-            nn.Linear(f_mid, f_out),
-            nn.SiLU(inplace=True) if not is_last else nn.Identity(),
-        ], skip)

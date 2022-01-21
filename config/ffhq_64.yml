@@ -9,7 +9,7 @@ model:
     n_layers: 4
     cross_attention: False
     chan_multiplier: [1, 2, 4, 8]
-    inner_layers: [3, 3, 3, 3]
+    inner_layers: [3, 3, 5, 5]
     attention_layers: [False, False, True, False]
     z_dim: 512
 
@@ -20,7 +20,7 @@ encoder:
       base_hidden_channels: 64
       n_layers: 5
       chan_multiplier: [1, 2, 4, 8, 8]
-      inner_layers: [3, 3, 3, 3, 3]
+      inner_layers: [3, 3, 5, 5, 5]
       attention_layers: [False, False, True, False, False]
       linear_layers: [1472, 2048, 1024, 512]
       z_dim: 512
@@ -39,7 +39,7 @@ training:
   learning_rate: 1e-4
   save_every: 10000
   sample_every: 500
-  grandient_accumulation_steps: 4
+  grandient_accumulation_steps: 1
   grad_clip: 1
   ema_decay: 0.995
   epochs: 500
