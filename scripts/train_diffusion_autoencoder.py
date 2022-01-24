@@ -1,14 +1,17 @@
 import copy
 import os
+import random
 import shutil
 from pathlib import Path
 
 import click
+import numpy as np
 import omegaconf
 import torch
 import torchvision.datasets
 import tqdm
 from omegaconf import OmegaConf
+
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.config import get_class_from_str, number_of_params
@@ -263,7 +266,7 @@ class Trainer(object):
         for _step in range(base_step, step):
             self.tb_writer.add_scalar("valid/loss", mean_loss.item(), _step)
         self.sample('valid', image[0], step)
-        self.tb_writer.add_image("valid/real_image", (image[0] + 1) / 2, step)
+        #self.tb_writer.add_image("valid/real_image", (image[0] + 1) / 2, step)
         return mean_loss
 
     @torch.no_grad()
@@ -274,9 +277,15 @@ class Trainer(object):
         original = (x + 1) / 2
         self.diffusion.train()
         self.tb_writer.add_image(
-            f"{stage}/image", torchvision.utils.make_grid(generated, nrow=3), step
+            f"{stage}/image", torchvision.utils.make_grid([generated[0], original], nrow=3), step
         )
 
+
+def seed_all(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 @click.command()
@@ -285,12 +294,13 @@ class Trainer(object):
 @click.option("--epochs", "-e", default=5000)
 @click.option("--resume-from", "-r", default=None)
 @click.option("--resume", default=False, is_flag=True)
-def main(config: str, name: str, resume_from: str, epochs: int, resume: bool):
+@click.option("--seed", default=0)
+def main(config: str, name: str, resume_from: str, epochs: int, resume: bool, seed: int):
     if resume:
         config = OUT_DIR + name + '/config.yml'
         resume_from = OUT_DIR + name + '/last.pt'
     _config = omegaconf.OmegaConf.load(config)
-
+    seed_all(seed)
     Trainer(_config, resume_from, name, epochs).train()
 
 

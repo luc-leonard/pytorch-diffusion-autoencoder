@@ -22,7 +22,7 @@ encoder:
       chan_multiplier: [1, 2, 4, 8, 8]
       inner_layers: [3, 3, 5, 5, 5]
       attention_layers: [False, False, True, False, False]
-      linear_layers: [1472, 2048, 1024, 512]
+      linear_layers: [1472, 1024, 512]
       z_dim: 512
       dropout: 0.1
 
