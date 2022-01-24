@@ -18,7 +18,7 @@ from utils.config import get_class_from_str
 import imageio
 
 @torch.no_grad()
-def show_interpolation(diffusion, model, x_1, x_2, steps=10, i=0):
+def show_interpolation(diffusion, model, x_1, x_2, steps=100, i=0):
     print("Generating interpolation")
     x_1_latent = diffusion.latent_encoder(x_1[None])
     x_2_latent = diffusion.latent_encoder(x_2[None])
@@ -29,7 +29,7 @@ def show_interpolation(diffusion, model, x_1, x_2, steps=10, i=0):
     noise = torch.randn((steps, model.in_channels, *model.size)).to(x_1.device)
     y_s = diffusion.p_decode_loop((steps, model.in_channels, *model.size), interpolations.squeeze(1), x_start=noise)
     y_s = torch.clamp(y_s, 0, 1)
-    video = imageio.get_writer(f'interpolation_{i}.gif', fps=5)
+    video = imageio.get_writer(f'interpolation_{i}.gif', fps=15)
     for y in y_s:
         y = ToPILImage()(y.cpu())
         y = y.resize((128, 128), LANCZOS)

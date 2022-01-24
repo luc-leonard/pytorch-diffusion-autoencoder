@@ -151,9 +151,7 @@ class AutoEncoderGaussianDiffusion(GaussianDiffusion):
 
     @torch.no_grad()
     def encode(self, x):
-        return self.latent_encoder(x), self.q_sample(x_start=x,
-                                                     t=torch.full((1,), self.num_timesteps, device=self.betas.device, dtype=torch.long),
-                                                     noise=None)
+        return self.latent_encoder(x), torch.randn_like(x) # TODO: implement equation 8: stochastic encoder
 
     @torch.no_grad()
     def p_decode_loop(self, shape, latent, x_start=None):

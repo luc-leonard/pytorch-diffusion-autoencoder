@@ -218,7 +218,6 @@ class Trainer(object):
             if step % self.sample_every == 0:
                 self.step_ema(step)
                 self.sample('train', image[0], step)
-                self.tb_writer.add_image("train/real_image", (image[0] + 1) / 2, step)
             if step % self.save_every == 0:
                 self.step_ema(step)
                 self.save(step)
@@ -266,7 +265,6 @@ class Trainer(object):
         for _step in range(base_step, step):
             self.tb_writer.add_scalar("valid/loss", mean_loss.item(), _step)
         self.sample('valid', image[0], step)
-        #self.tb_writer.add_image("valid/real_image", (image[0] + 1) / 2, step)
         return mean_loss
 
     @torch.no_grad()
