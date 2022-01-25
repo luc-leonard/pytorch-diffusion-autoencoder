@@ -21,7 +21,7 @@ class InfiniteMNIST(Dataset):
 
 class QMNIST(Dataset):
     def __init__(self, root, size=None):
-        self.ds = torchvision.datasets.QMNIST(root=root, what='nist', download=True)
+        self.ds = torchvision.datasets.QMNIST(root=root, what="nist", download=True)
         if size is not None:
             self.transform = torchvision.transforms.Resize(size)
         else:
@@ -47,5 +47,5 @@ class MNIST(Dataset):
 
     def __getitem__(self, index):
         sample = self.ds[index]
-        image = sample[0]#.resize((32, 32))
+        image = sample[0]  # .resize((32, 32))
         return ToTensor()(image), sample[1]

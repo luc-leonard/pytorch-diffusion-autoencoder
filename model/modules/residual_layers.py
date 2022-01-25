@@ -2,7 +2,6 @@ import torch
 from torch import nn
 
 from model.modules.embeddings import Identity
-from utils.torch import expand_to_planes
 
 
 class AdaptiveGroupNormalization(nn.Module):
@@ -18,11 +17,15 @@ class AdaptiveGroupNormalization(nn.Module):
             nn.Linear(input_channels * 2, input_channels * 2),
             nn.SiLU(),
         )
-        self.t_mlp = nn.Sequential(nn.Linear(timestep_channels, input_channels * 2), nn.SiLU())
+        self.t_mlp = nn.Sequential(
+            nn.Linear(timestep_channels, input_channels * 2), nn.SiLU()
+        )
 
     def forward(self, x, t, embeddings):
         t_scale, t_shift = self.t_mlp(t).chunk(2, dim=-1)
-        x = torch.addcmul(t_shift[..., None, None], x, t_scale[..., None, None] + 1)  # x = (x * t_shift) + t_scale
+        x = torch.addcmul(
+            t_shift[..., None, None], x, t_scale[..., None, None] + 1
+        )  # x = (x * t_shift) + t_scale
 
         z_scale, z_shift = self.z_mlp(embeddings).chunk(2, dim=-1)
         # x = z_scale * ((x * t_shift) + t_scale) + z_shift
@@ -33,9 +36,20 @@ class AdaptiveGroupNormalization(nn.Module):
 
 # cf appendix A
 class ResConvBlock(nn.Module):
-    def __init__(self, c_in, c_mid, c_out, attention=False, groups=32, timestep_embedding=None, embeddings_dim=None):
+    def __init__(
+        self,
+        c_in,
+        c_mid,
+        c_out,
+        attention=False,
+        groups=32,
+        timestep_embedding=None,
+        embeddings_dim=None,
+    ):
         super().__init__()
-        self.skip = Identity() if c_in == c_out else nn.Conv2d(c_in, c_out, 1, bias=False)
+        self.skip = (
+            Identity() if c_in == c_out else nn.Conv2d(c_in, c_out, 1, bias=False)
+        )
 
         self.gn_1 = nn.GroupNorm(groups, c_in)
         self.silu = nn.SiLU(inplace=True)
@@ -44,7 +58,9 @@ class ResConvBlock(nn.Module):
         self.gn_2 = nn.GroupNorm(groups, c_mid, affine=False)
 
         if timestep_embedding:
-            self.ada_gn = AdaptiveGroupNormalization(c_mid, timestep_embedding, embeddings_dim)
+            self.ada_gn = AdaptiveGroupNormalization(
+                c_mid, timestep_embedding, embeddings_dim
+            )
 
         self.conv_2 = nn.Conv2d(c_mid, c_out, 3, padding=1)
 

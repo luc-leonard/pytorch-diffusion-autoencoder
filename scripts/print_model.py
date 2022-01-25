@@ -15,12 +15,11 @@ def print_model(config_path):
     model = get_class_from_str(config.model.target)(**config.model.params)
     encoder = get_class_from_str(config.encoder.target)(**config.encoder.params)
     print(model)
-    print('--------------------------------------------------------------')
+    print("--------------------------------------------------------------")
     print(encoder)
 
-    print(f'model has {number_of_params(model):,} trainable parameters')
-    print(f'encoder has {number_of_params(encoder):,} trainable parameters')
-
+    print(f"model has {number_of_params(model):,} trainable parameters")
+    print(f"encoder has {number_of_params(encoder):,} trainable parameters")
 
 
 if __name__ == "__main__":

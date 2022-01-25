@@ -18,8 +18,6 @@ from utils.config import get_class_from_str, number_of_params
 import logging
 
 
-
-
 OUT_DIR = os.getenv("OUT_DIR", "./runs/")
 
 
@@ -30,6 +28,7 @@ def init_logger():
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     logger.addHandler(handler)
     return logger
+
 
 LOGGER = init_logger()
 LOGGER.info("LOG SYSTEM: Started")
@@ -43,7 +42,9 @@ class EMA:
         self.beta = beta
 
     def update_model_average(self, ma_model, current_model):
-        for current_params, ma_params in zip(current_model.parameters(), ma_model.parameters()):
+        for current_params, ma_params in zip(
+            current_model.parameters(), ma_model.parameters()
+        ):
             old_weight, up_weight = ma_params.data, current_params.data
             ma_params.data = self.update_average(old_weight, up_weight)
 
@@ -54,14 +55,10 @@ class EMA:
 
 
 class Trainer(object):
-    def __init__(
-        self,
-        config,
-        checkpoint_path,
-        name,
-        nb_epochs_to_train,
-    ):
+    def __init__(self, config, checkpoint_path, name, nb_epochs_to_train, seed):
         super().__init__()
+        self.seed = seed
+        seed_all(seed)
         self.config = config
         self.run_path = f"{OUT_DIR}/{name}"
         self.tb_writer = SummaryWriter(self.run_path)
@@ -75,9 +72,13 @@ class Trainer(object):
         self.update_ema_every = 1000
         self.step_start_ema = 10000
         self.grandient_accumulation_steps = config.training.grandient_accumulation_steps
-        self.opt = torch.optim.Adam(self.diffusion.parameters(), lr=config.training.learning_rate)
-        if config.training.scheduler != 'none':
-            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.opt, patience=config.training.scheduler.patience, verbose=True)
+        self.opt = torch.optim.Adam(
+            self.diffusion.parameters(), lr=config.training.learning_rate
+        )
+        if config.training.scheduler != "none":
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                self.opt, patience=config.training.scheduler.patience, verbose=True
+            )
             print(f"Using scheduler {self.scheduler}")
         else:
             self.scheduler = None
@@ -90,7 +91,7 @@ class Trainer(object):
         if checkpoint_path is not None:
             self.load(checkpoint_path)
             for param_group in self.opt.param_groups:
-                param_group['lr'] = config.training.learning_rate
+                param_group["lr"] = config.training.learning_rate
         self.reset_parameters()
         self.nb_epochs_to_train = nb_epochs_to_train
         self.sample_every = config.training.sample_every
@@ -99,10 +100,9 @@ class Trainer(object):
         self.add_model_to_tensorboard()
 
         for param_group in self.opt.param_groups:
-            param_group['lr'] = config.training.learning_rate
+            param_group["lr"] = config.training.learning_rate
 
         self.min_loss = torch.Tensor([float("inf")]).to(device)
-
 
     def add_model_to_tensorboard(self):
         ...
@@ -110,10 +110,16 @@ class Trainer(object):
         # self.tb_writer.add_graph(self.diffusion, image.cuda())
 
     def _create_models(self, config):
-        self.model = get_class_from_str(config.model.target)(**config.model.params).to(device)
-        LOGGER.info(f'model has {number_of_params(self.model):,} trainable parameters')
-        self.encoder = get_class_from_str(config.encoder.target)(**config.encoder.params).to(device)
-        LOGGER.info(f'encoder has {number_of_params(self.encoder):,} trainable parameters')
+        self.model = get_class_from_str(config.model.target)(**config.model.params).to(
+            device
+        )
+        LOGGER.info(f"model has {number_of_params(self.model):,} trainable parameters")
+        self.encoder = get_class_from_str(config.encoder.target)(
+            **config.encoder.params
+        ).to(device)
+        LOGGER.info(
+            f"encoder has {number_of_params(self.encoder):,} trainable parameters"
+        )
         self.diffusion = get_class_from_str(config.diffusion.target)(
             self.model, **config.diffusion.params, latent_encoder=self.encoder
         ).to(device)
@@ -122,12 +128,25 @@ class Trainer(object):
         full_dataset = get_class_from_str(config.data.target)(**config.data.params)
         train_size = int(0.8 * len(full_dataset))
         test_size = len(full_dataset) - train_size
-        self.train_dataset, self.valid_dataset = torch.utils.data.random_split(full_dataset, [train_size, test_size])
-        self.train_dataloader = torch.utils.data.DataLoader(
-            self.train_dataset, batch_size=self.config.training.batch_size, shuffle=True, num_workers=4, pin_memory=True
+        self.train_dataset, self.valid_dataset = torch.utils.data.random_split(
+            full_dataset,
+            [train_size, test_size],
+            generator=torch.Generator().manual_seed(self.seed),
         )
-        self.valid_dataloader = torch.utils.data.DataLoader(self.valid_dataset, batch_size=self.config.training.batch_size,
-                                                       shuffle=True, num_workers=4, pin_memory=True)
+        self.train_dataloader = torch.utils.data.DataLoader(
+            self.train_dataset,
+            batch_size=self.config.training.batch_size,
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
+        )
+        self.valid_dataloader = torch.utils.data.DataLoader(
+            self.valid_dataset,
+            batch_size=self.config.training.batch_size,
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
+        )
 
     def reset_parameters(self):
         self.ema_model.load_state_dict(self.diffusion.state_dict())
@@ -144,22 +163,30 @@ class Trainer(object):
                 "model_state_dict": self.diffusion.state_dict(),
                 "ema_model_state_dict": self.ema_model.state_dict(),
                 "optimizer_state_dict": self.opt.state_dict(),
-                "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
+                "scheduler_state_dict": self.scheduler.state_dict()
+                if self.scheduler
+                else None,
                 "min_loss": self.min_loss,
                 "scaler": self.scaler.state_dict(),
                 "step": step,
                 "epoch": self.current_epoch,
                 "shown_images": self.shown_images,
             },
-            str(Path(self.run_path) / f"diffusion_{step}.pt")),
-        shutil.copy(Path(self.run_path) / f"diffusion_{step}.pt", Path(self.run_path) / "last.pt")
+            str(Path(self.run_path) / f"diffusion_{step}.pt"),
+        ),
+        shutil.copy(
+            Path(self.run_path) / f"diffusion_{step}.pt",
+            Path(self.run_path) / "last.pt",
+        )
 
     def load(self, checkpoint_path):
         LOGGER.info(f"Resuming from {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path)
-        errs = self.diffusion.load_state_dict(checkpoint["model_state_dict"], strict=False)
+        errs = self.diffusion.load_state_dict(
+            checkpoint["model_state_dict"], strict=False
+        )
         print(errs)
-        #self.opt.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.opt.load_state_dict(checkpoint["optimizer_state_dict"])
         if "scheduler_state_dict" in checkpoint and self.scheduler:
             self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         if self.fp16:
@@ -167,6 +194,8 @@ class Trainer(object):
         if "shown_images" in checkpoint:
             self.shown_images = checkpoint["shown_images"]
 
+        if "ema_model_state_dict" in checkpoint and self.scheduler:
+            self.ema_model.load_state_dict(checkpoint["ema_model_state_dict"])
         self.current_step = checkpoint["step"]
         self.current_epoch = checkpoint["epoch"]
         self.min_loss = checkpoint["min_loss"]
@@ -174,15 +203,19 @@ class Trainer(object):
     def train(self):
         base_epoch = self.current_epoch
         conf_yaml = OmegaConf.to_yaml(self.config)
-        self.tb_writer.add_text("config", conf_yaml.replace('\n', '  \n'), 0) # line return are markdown format
-        (Path(self.run_path) / 'config.yml').write_text(conf_yaml)
+        self.tb_writer.add_text(
+            "config", conf_yaml.replace("\n", "  \n"), 0
+        )  # line return are markdown format
+        (Path(self.run_path) / "config.yml").write_text(conf_yaml)
         try:
             for epoch in range(base_epoch, base_epoch + self.nb_epochs_to_train):
                 step = self._do_epoch(epoch)
                 valid_loss = self._do_valid()
                 self.current_epoch += 1
                 LOGGER.info(f"Epoch {epoch} done, step {step}, valid loss {valid_loss}")
-                if self.scheduler and isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                if self.scheduler and isinstance(
+                    self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
+                ):
                     self.scheduler.step(valid_loss)
                     print(f"Scheduler step {self.scheduler.num_bad_epochs}")
                 self.current_step = step
@@ -212,12 +245,14 @@ class Trainer(object):
                 self.optimizer_step()
                 self.opt.zero_grad()
 
-            if self.scheduler and not isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            if self.scheduler and not isinstance(
+                self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
+            ):
                 self.scheduler.step()
 
             if step % self.sample_every == 0:
                 self.step_ema(step)
-                self.sample('train', image[0], step)
+                self.sample("train", image[0], step)
             if step % self.save_every == 0:
                 self.step_ema(step)
                 self.save(step)
@@ -244,9 +279,12 @@ class Trainer(object):
         self.min_loss = torch.min(self.min_loss.detach(), loss.detach())
         self.tb_writer.add_scalar("train/loss", loss.item(), step)
         self.tb_writer.add_scalar("train/min_loss", self.min_loss.item(), step)
-        self.tb_writer.add_scalar("train/potential", loss.detach() - self.min_loss, step)
+        self.tb_writer.add_scalar(
+            "train/potential", loss.detach() - self.min_loss, step
+        )
         self.tb_writer.add_scalar("train/epoch", epoch, step)
         self.tb_writer.add_scalar("train/lr", self.opt.param_groups[0]["lr"], step)
+        self.tb_writer.add_scalar("train/shown_images", self.shown_images, step)
 
     @torch.no_grad()
     def _do_valid(self):
@@ -264,18 +302,22 @@ class Trainer(object):
         mean_loss = torch.stack(losses).mean()
         for _step in range(base_step, step):
             self.tb_writer.add_scalar("valid/loss", mean_loss.item(), _step)
-        self.sample('valid', image[0], step)
+        self.sample("valid", image[0], step)
         return mean_loss
 
     @torch.no_grad()
     def sample(self, stage, x, step):
         self.diffusion.eval()
-        generated, latent = self.diffusion.p_sample_loop((1, self.model.in_channels, *self.model.size), x[None])
+        generated, latent = self.diffusion.p_sample_loop(
+            (1, self.model.in_channels, *self.model.size), x[None]
+        )
         generated = (generated + 1) / 2
         original = (x + 1) / 2
         self.diffusion.train()
         self.tb_writer.add_image(
-            f"{stage}/image", torchvision.utils.make_grid([generated[0], original], nrow=3), step
+            f"{stage}/image",
+            torchvision.utils.make_grid([generated[0], original], nrow=3),
+            step,
         )
 
 
@@ -293,13 +335,14 @@ def seed_all(seed):
 @click.option("--resume-from", "-r", default=None)
 @click.option("--resume", default=False, is_flag=True)
 @click.option("--seed", default=0)
-def main(config: str, name: str, resume_from: str, epochs: int, resume: bool, seed: int):
+def main(
+    config: str, name: str, resume_from: str, epochs: int, resume: bool, seed: int
+):
     if resume:
-        config = OUT_DIR + name + '/config.yml'
-        resume_from = OUT_DIR + name + '/last.pt'
+        config = OUT_DIR + name + "/config.yml"
+        resume_from = OUT_DIR + name + "/last.pt"
     _config = omegaconf.OmegaConf.load(config)
-    seed_all(seed)
-    Trainer(_config, resume_from, name, epochs).train()
+    Trainer(_config, resume_from, name, epochs, seed).train()
 
 
 if __name__ == "__main__":

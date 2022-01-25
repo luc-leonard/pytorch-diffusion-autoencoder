@@ -1,4 +1,5 @@
 import glob
+import logging
 
 import numpy as np
 import torch
@@ -8,6 +9,8 @@ import albumentations
 import traceback
 import torchaudio
 
+
+LOGGER = logging.getLogger(__name__)
 
 class MyImageFolderDataset(Dataset):
     def __init__(
@@ -22,6 +25,12 @@ class MyImageFolderDataset(Dataset):
         for extension in extensions:
             self.files.extend(glob.glob(root + "/**/*" + extension))
             self.files.extend(glob.glob(root + "/*" + extension))
+
+        self.files = sorted(self.files)
+
+        LOGGER.info(f"Found {len(self.files)} files")
+        LOGGER.info(f"Files: {self.files[:10]} ... {self.files[-10:]}")
+
         if resize is not None:
             rescaler = albumentations.SmallestMaxSize(max_size=resize)
         else:

@@ -4,7 +4,7 @@ from torch import nn
 class Upsample(nn.Module):
     def __init__(self, channels):
         super().__init__()
-        self.up = nn.Upsample(scale_factor=2, mode='nearest')
+        self.up = nn.Upsample(scale_factor=2, mode="nearest")
         self.conv = nn.Conv2d(channels, channels, 3, padding=1)
 
     def forward(self, x):

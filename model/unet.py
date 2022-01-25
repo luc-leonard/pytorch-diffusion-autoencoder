@@ -33,7 +33,6 @@ class UNet(nn.Module):
         # embedding layers
         self.timestep_embed = FourierFeatures(1, timestep_embed)
 
-
         down_layers = []
         up_layers = []
         self.input_projection = UNetLayer(
@@ -44,7 +43,7 @@ class UNet(nn.Module):
             embeddings_dim=z_dim,
             timestep_embeddings=timestep_embed,
             attention=False,
-            groups=1
+            groups=1,
         )
 
         current_size = size[0]
@@ -52,7 +51,9 @@ class UNet(nn.Module):
         x_shapes = [c_in]
 
         for level in range(n_layers):
-            LOGGER.info(f'resolution : {current_size} for level {level}. Attentions: {attention_layers[level]}')
+            LOGGER.info(
+                f"resolution : {current_size} for level {level}. Attentions: {attention_layers[level]}"
+            )
             layer = UNetLayer(
                 c_in=c_in,
                 c_out=base_hidden_channels * chan_multiplier[level],
@@ -75,12 +76,14 @@ class UNet(nn.Module):
             timestep_embeddings=timestep_embed,
             attention=True,
             downsample=False,
-            upsample=False
+            upsample=False,
         )
         x_shapes.pop()
         for level in reversed(range(n_layers)):
             current_size *= 2
-            LOGGER.info(f'resolution: {current_size} for level {level}. Attentions: {attention_layers[level]}')
+            LOGGER.info(
+                f"resolution: {current_size} for level {level}. Attentions: {attention_layers[level]}"
+            )
             layer = UNetLayer(
                 base_hidden_channels * chan_multiplier[level] * 2,
                 x_shapes.pop(),
@@ -118,13 +121,13 @@ class UNet(nn.Module):
 
         x = self.input_projection(x, timestep_embed, additional_embed)
         skips = []
-        LOGGER.debug('before down', x.shape)
+        LOGGER.debug("before down", x.shape)
         for down in self.down:
             x = down(x, timestep_embed, additional_embed)
             skips.append(x)
             LOGGER.debug(x.shape)
         x = self.middle_layer(x, timestep_embed, additional_embed)
-        LOGGER.debug('after mid', x.shape)
+        LOGGER.debug("after mid", x.shape)
         for up, skip in zip(self.up, skips[::-1]):
             LOGGER.debug(x.shape, skip.shape)
             x = up(torch.cat([x, skip], dim=1), timestep_embed, additional_embed)

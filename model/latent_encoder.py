@@ -8,6 +8,7 @@ import torch
 
 LOGGER = logging.getLogger(__name__)
 
+
 class LatentEncoder(nn.Module):
     def __init__(
         self,
@@ -20,17 +21,21 @@ class LatentEncoder(nn.Module):
         attention_layers,
         z_dim,
         dropout=None,
-        linear_layers=[]
+        linear_layers=[],
     ):
         super(LatentEncoder, self).__init__()
         self.input_projection = UNetLayer(
-            in_channels, base_hidden_channels, inner_layers=3, downsample=False, groups=1
+            in_channels,
+            base_hidden_channels,
+            inner_layers=3,
+            downsample=False,
+            groups=1,
         )
 
         down_layers = []
         c_in = base_hidden_channels
         for level in range(n_layers):
-            LOGGER.info(f'level {level}. Attentions: {attention_layers[level]}')
+            LOGGER.info(f"level {level}. Attentions: {attention_layers[level]}")
             layer = UNetLayer(
                 c_in,
                 base_hidden_channels * chan_multiplier[level],

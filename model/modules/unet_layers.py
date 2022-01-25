@@ -26,11 +26,23 @@ class UNetLayer(nn.Module):
         if downsample:
             self.down = Downsample(c_in)
 
-        self.conv_in = ResConvBlock(c_in, c_out, c_out, is_last, groups, timestep_embeddings, embeddings_dim)
+        self.conv_in = ResConvBlock(
+            c_in, c_out, c_out, is_last, groups, timestep_embeddings, embeddings_dim
+        )
         if attention:
             layers.append(SelfAttention2d(c_out, c_out // 64))
         for i in range(inner_layers):
-            layers.append(ResConvBlock(c_out, c_out, c_out, is_last, groups, timestep_embeddings, embeddings_dim))
+            layers.append(
+                ResConvBlock(
+                    c_out,
+                    c_out,
+                    c_out,
+                    is_last,
+                    groups,
+                    timestep_embeddings,
+                    embeddings_dim,
+                )
+            )
             if attention:
                 layers.append(SelfAttention2d(c_out, c_out // 64))
 
