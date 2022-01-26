@@ -12,9 +12,9 @@ class AdaptiveGroupNormalization(nn.Module):
             nn.SiLU(),
             nn.Linear(embedding_dim, input_channels * 2),
             nn.SiLU(),
-            nn.Linear(input_channels * 2, input_channels * 2),
+            nn.Linear(input_channels * 2, input_channels),
             nn.SiLU(),
-            nn.Linear(input_channels * 2, input_channels * 2),
+            nn.Linear(input_channels, input_channels),
             nn.SiLU(),
         )
         self.t_mlp = nn.Sequential(
@@ -23,13 +23,11 @@ class AdaptiveGroupNormalization(nn.Module):
 
     def forward(self, x, t, embeddings):
         t_scale, t_shift = self.t_mlp(t).chunk(2, dim=-1)
-        x = torch.addcmul(
-            t_shift[..., None, None], x, t_scale[..., None, None] + 1
-        )  # x = (x * t_shift) + t_scale
+        x = torch.addcmul(t_shift[..., None, None], x, t_scale[..., None, None])  # x = (x * t_shift) + t_scale
 
-        z_scale, z_shift = self.z_mlp(embeddings).chunk(2, dim=-1)
-        # x = z_scale * ((x * t_shift) + t_scale) + z_shift
-        x = torch.addcmul(z_shift[..., None, None], x, z_scale[..., None, None] + 1)
+        z_scale = self.z_mlp(embeddings)
+        # x = (z_scale) * ((x * t_shift) + t_scale)
+        x = x * (z_scale[..., None, None])
 
         return x
 
