@@ -4,30 +4,24 @@ from torch import nn
 from model.modules.embeddings import Identity
 
 
+# this layers implements the equation 7 in the paper
 class AdaptiveGroupNormalization(nn.Module):
-    def __init__(self, input_channels, timestep_channels, embedding_dim):
+    def __init__(self, input_channels, timestep_channels, embedding_dim, z_linear_layers=[2,1,1]):
         super(AdaptiveGroupNormalization, self).__init__()
         self.z_mlp = nn.Sequential(
-            nn.Linear(embedding_dim, embedding_dim),
             nn.SiLU(),
-            nn.Linear(embedding_dim, input_channels * 2),
-            nn.SiLU(),
-            nn.Linear(input_channels * 2, input_channels),
-            nn.SiLU(),
-            nn.Linear(input_channels, input_channels),
-            nn.SiLU(),
+            nn.Linear(embedding_dim, input_channels),
         )
         self.t_mlp = nn.Sequential(
-            nn.Linear(timestep_channels, input_channels * 2), nn.SiLU()
+            nn.SiLU(),
+            nn.Linear(timestep_channels, input_channels * 2)
         )
 
     def forward(self, x, t, embeddings):
         t_scale, t_shift = self.t_mlp(t).chunk(2, dim=-1)
-        x = torch.addcmul(t_shift[..., None, None], x, t_scale[..., None, None])  # x = (x * t_shift) + t_scale
+        z_scale = self.z_mlp(embeddings)[..., None, None]
 
-        z_scale = self.z_mlp(embeddings)
-        # x = (z_scale) * ((x * t_shift) + t_scale)
-        x = x * (z_scale[..., None, None])
+        x = (z_scale + 1) * torch.addcmul(t_shift[..., None, None], x, t_scale[..., None, None])
 
         return x
 
@@ -52,15 +46,15 @@ class ResConvBlock(nn.Module):
         self.gn_1 = nn.GroupNorm(groups, c_in)
         self.silu = nn.SiLU(inplace=True)
         self.dropout = nn.Dropout(p=0.1)
-        self.conv_1 = nn.Conv2d(c_in, c_mid, 3, padding=1)
-        self.gn_2 = nn.GroupNorm(groups, c_mid, affine=False)
+        self.conv_1 = nn.Conv2d(c_in, c_out, 3, padding=1)
+        self.gn_2 = nn.GroupNorm(groups, c_out, affine=False)
 
         if timestep_embedding:
             self.ada_gn = AdaptiveGroupNormalization(
                 c_mid, timestep_embedding, embeddings_dim
             )
 
-        self.conv_2 = nn.Conv2d(c_mid, c_out, 3, padding=1)
+        self.conv_2 = nn.Conv2d(c_out, c_out, 3, padding=1)
 
     def forward(self, input, t=None, embedding=None):
         x = self.gn_1(input)

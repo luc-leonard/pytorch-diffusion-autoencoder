@@ -1,7 +1,7 @@
 model:
   target: model.unet.UNet
   params:
-    timestep_embed: 16
+    timestep_embed: 128
     size: [64, 64]
     in_channels: 3
     out_channels: 3
@@ -12,6 +12,7 @@ model:
     inner_layers: [3, 3, 5, 5]
     attention_layers: [False, False, True, False]
     z_dim: 512
+    z_dim_linear_layers_mult: [2, 1]
 
 encoder:
     target: model.latent_encoder.LatentEncoder

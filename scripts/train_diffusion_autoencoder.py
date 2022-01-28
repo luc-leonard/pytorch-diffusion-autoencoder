@@ -13,6 +13,7 @@ import tqdm
 from omegaconf import OmegaConf
 
 from torch.utils.tensorboard import SummaryWriter
+from torchvision.transforms import ToPILImage
 
 from utils.config import get_class_from_str, number_of_params
 import logging

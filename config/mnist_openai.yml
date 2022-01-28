@@ -1,15 +1,14 @@
 model:
-  target: model.unet.UNet
+  target: model.openai.openai.UNetModel
   params:
-    size: [28, 28]
+    image_size: [28, 28]
     in_channels: 1
     out_channels: 1
-    base_hidden_channels: 64
-    n_layers: 2
-    inner_layers: [3,3]
-    chan_multiplier: [1,2]
-    attention_layers: [False, True]
-    z_dim: 256
+    model_channels: 64
+    num_res_blocks: 2
+    channel_mult: [1,2]
+    attention_resolutions: [8]
+    use_scale_shift_norm: True
 
 encoder:
   target: model.latent_encoder.LatentEncoder
