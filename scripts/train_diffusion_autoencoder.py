@@ -88,7 +88,6 @@ class Trainer(object):
         self.shown_images = 0
         self.fp16 = config.training.fp16
         self.scaler = torch.cuda.amp.GradScaler()
-
         if checkpoint_path is not None:
             self.load(checkpoint_path)
             for param_group in self.opt.param_groups:

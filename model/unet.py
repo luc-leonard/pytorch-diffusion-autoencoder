@@ -123,5 +123,5 @@ class UNet(nn.Module):
             LOGGER.debug(x.shape, skip.shape)
             x = up(torch.cat([x, skip], dim=1), timestep_embed, additional_embed)
 
-        x = self.output_projection(x)
+        x = self.output_projection(x, timestep_embed, additional_embed)
         return x

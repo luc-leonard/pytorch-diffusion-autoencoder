@@ -75,7 +75,7 @@ def zero_module(module):
 
 
 def scale_module(module, scale):
-    """
+    """512
     Scale the parameters of a module and return it.
     """
     for p in module.parameters():

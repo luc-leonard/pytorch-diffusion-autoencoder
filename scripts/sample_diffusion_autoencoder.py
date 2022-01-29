@@ -105,7 +105,7 @@ def sample(config_path, checkpoint_path, device="cpu", path=None, path_2=None):
         for i, (xs, _) in enumerate(tqdm.tqdm(dataloader)):
             x_1 = xs[0].to(device)
             x_2 = xs[1].to(device)
-            show_interpolation(diffusion, model, x_1, x_2, i=i, fps=25, steps=100)
+            show_interpolation(diffusion, model, x_1, x_2, i=i, fps=5, steps=10)
             if i == 0:
                 break
 

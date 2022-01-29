@@ -14,9 +14,7 @@ class UNetLayer(nn.Module):
         attention: bool = False,
         downsample: bool = False,
         upsample: bool = False,
-        is_last=False,
         embeddings_dim=None,
-        groups=32,
         timestep_embeddings=None,
     ):
         super().__init__()
@@ -24,28 +22,20 @@ class UNetLayer(nn.Module):
 
         self.downsample = downsample
 
-        self.conv_in = ResBlock(
-           channels=c_in,
-            emb_channels=timestep_embeddings,
-            dropout=0,
-            out_channels=c_out,
-            z_dim=embeddings_dim,
-
-        )
-        if attention:
-            layers.append(AttentionBlock(c_out, num_heads=1, num_head_channels=-1))
-        for i in range(inner_layers - 1):
+        ch = c_in
+        for i in range(inner_layers):
             layers.append(
                 ResBlock(
-                    channels=c_out,
+                    channels=ch,
                     emb_channels=timestep_embeddings,
                     dropout=0,
                     out_channels=c_out,
                     z_dim=embeddings_dim,
                 )
             )
+            ch = c_out
             if attention:
-                layers.append(SelfAttention2d(c_out, c_out // 64))
+                layers.append(AttentionBlock(ch))
 
         if downsample:
             layers.append(Downsample(c_out, use_conv=True))

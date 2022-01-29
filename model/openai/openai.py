@@ -69,7 +69,7 @@ class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
     support it as an extra input.
     """
 
-    def forward(self, x, emb, z):
+    def forward(self, x, emb=None, z=None):
         for layer in self:
             if isinstance(layer, TimestepBlock):
                 x = layer(x, emb, z)
@@ -242,7 +242,7 @@ class ResBlock(TimestepBlock):
             self._forward, (x, t_emb, z), self.parameters(), self.use_checkpoint
         )
 
-    def _forward(self, x, emb, z):
+    def _forward(self, x, emb=None, z=None):
         if self.updown:
             in_rest, in_conv = self.in_layers[:-1], self.in_layers[-1]
             h = in_rest(x)
@@ -251,17 +251,20 @@ class ResBlock(TimestepBlock):
             h = in_conv(h)
         else:
             h = self.in_layers(x)
-        emb_out = self.emb_layers(emb).type(h.dtype)
-        while len(emb_out.shape) < len(h.shape):
-            emb_out = emb_out[..., None]
-        if self.use_scale_shift_norm:
-            out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
-            scale, shift = th.chunk(emb_out, 2, dim=1)
-            z_scale = self.z_emb_layers(z)[..., None, None]
-            h = (1 + z_scale) * (out_norm(h) * (1 + scale) + shift)
-            h = out_rest(h)
+        if emb is not None:
+            emb_out = self.emb_layers(emb).type(h.dtype)
+            while len(emb_out.shape) < len(h.shape):
+                emb_out = emb_out[..., None]
+            if self.use_scale_shift_norm:
+                out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
+                scale, shift = th.chunk(emb_out, 2, dim=1)
+                z_scale = self.z_emb_layers(z)[..., None, None]
+                h = (1 + z_scale) * (out_norm(h) * (1 + scale) + shift)
+                h = out_rest(h)
+            else:
+                h = h + emb_out
+                h = self.out_layers(h)
         else:
-            h = h + emb_out
             h = self.out_layers(h)
         return self.skip_connection(x) + h
 
@@ -456,6 +459,7 @@ class UNetModel(nn.Module):
         use_scale_shift_norm=False,
         resblock_updown=False,
         use_new_attention_order=False,
+        z_dim=512,
     ):
         super().__init__()
 
@@ -507,6 +511,7 @@ class UNetModel(nn.Module):
                         dims=dims,
                         use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
+                        z_dim=z_dim,
                     )
                 ]
                 ch = int(mult * model_channels)
@@ -537,6 +542,7 @@ class UNetModel(nn.Module):
                             use_checkpoint=use_checkpoint,
                             use_scale_shift_norm=use_scale_shift_norm,
                             down=True,
+                            z_dim=z_dim,
                         )
                         if resblock_updown
                         else Downsample(
@@ -557,6 +563,7 @@ class UNetModel(nn.Module):
                 dims=dims,
                 use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
+                z_dim=z_dim,
             ),
             AttentionBlock(
                 ch,
@@ -572,6 +579,7 @@ class UNetModel(nn.Module):
                 dims=dims,
                 use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
+                z_dim=z_dim,
             ),
         )
         self._feature_size += ch
@@ -589,6 +597,7 @@ class UNetModel(nn.Module):
                         dims=dims,
                         use_checkpoint=use_checkpoint,
                         use_scale_shift_norm=use_scale_shift_norm,
+                        z_dim=z_dim,
                     )
                 ]
                 ch = int(model_channels * mult)
@@ -614,6 +623,7 @@ class UNetModel(nn.Module):
                             use_checkpoint=use_checkpoint,
                             use_scale_shift_norm=use_scale_shift_norm,
                             up=True,
+                            z_dim=z_dim
                         )
                         if resblock_updown
                         else Upsample(ch, conv_resample, dims=dims, out_channels=out_ch)
@@ -627,7 +637,7 @@ class UNetModel(nn.Module):
             nn.SiLU(),
             zero_module(conv_nd(dims, input_ch, out_channels, 3, padding=1)),
         )
-        print(self)
+
 
     def convert_to_fp16(self):
         """
@@ -867,7 +877,7 @@ class EncoderUNetModel(nn.Module):
         self.input_blocks.apply(convert_module_to_f32)
         self.middle_block.apply(convert_module_to_f32)
 
-    def forward(self, x, timesteps):
+    def forward(self, x, timesteps=None):
         """
         Apply the model to an input batch.
 
@@ -875,15 +885,15 @@ class EncoderUNetModel(nn.Module):
         :param timesteps: a 1-D batch of timesteps.
         :return: an [N x K] Tensor of outputs.
         """
-        emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
+
 
         results = []
         h = x.type(self.dtype)
         for module in self.input_blocks:
-            h = module(h, emb)
+            h = module(h, None)
             if self.pool.startswith("spatial"):
                 results.append(h.type(x.dtype).mean(dim=(2, 3)))
-        h = self.middle_block(h, emb)
+        h = self.middle_block(h, None)
         if self.pool.startswith("spatial"):
             results.append(h.type(x.dtype).mean(dim=(2, 3)))
             h = th.cat(results, axis=-1)
