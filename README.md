@@ -1,7 +1,7 @@
 # pytorch-diffusion-autoencoder
 WIP: Unofficial implementation of diffusion autoencoders, using pytorch (https://diff-ae.github.io/)
 
-Special thanks for https://github.com/lucidrains/denoising-diffusion-pytorch
+Special thanks for https://github.com/lucidrains/denoising-diffusion-pytorch and https://github.com/openai/guided-diffusion
 
 # Samples
 ![sample](./sample/sample_1.png)
@@ -10,9 +10,12 @@ Special thanks for https://github.com/lucidrains/denoising-diffusion-pytorch
 ![sample](./sample/interpolation2.gif)
 ![sample](./sample/interpolation3.gif)
 
-# Models
-
-mnist checkpoint: https://mega.nz/file/OQ90kLrI#eLlhmK6zgmvtyXduMJlEgUDD_dGctu7XD1H5w6b0CSw
+# Status
+- [x] Models and train script
+- [x] Sample from model
+- [x] Interpolation
+- [ ] latent diffusion
+- [ ] attribute manipulation on real images
 
 # Usage
 
@@ -26,31 +29,30 @@ mnist checkpoint: https://mega.nz/file/OQ90kLrI#eLlhmK6zgmvtyXduMJlEgUDD_dGctu7X
 ```
 import torch
 from model.diffusion import GaussianDiffusion
-from model.unet import UNet
+from model.openai.openai import UnetModel, EncoderUNetModel
 from model.latent_encoder import LateEncoder
 
 model = Unet(
+        image_size=[28,28],
         in_channels=1,
         out_channels=1,
-        base_hidden_channels=32,
-        n_layers=2,
-        timestep_embed=16,
-        chan_multiplier=[1, 2],
-        inner_layers=[3, 3],
-        attention_layers=[False, True ],
-        z_dim=128,
+        model_channels=32,
+        num_res_blocks=2,
+        channel_mult=[1, 2],
+        attention_resolutions=[],
+        z_dim=256,
 )
 
 # almost same as the model. z_dim MUST be equals.
-encoder = LatentEncoder(
-      in_channels = 1
-      out_channels = 1
-      base_hidden_channels = 32
-      n_layers = 4
-      chan_multiplier = [ 1,2,2, 4]
-      inner_layers = [ 1,2,2, 4]
-      attention_layers = [ False, False , True, True]
-      z_dim = 128
+encoder = EncoderUNetModel(
+        image_size=[28,28],
+        in_channels=1,
+        model_channels=32,
+        num_res_blocks=2,
+        channel_mult=[1, 2],
+        attention_resolutions=[],
+        pool= 'spatial_v2',
+        z_dim=256,
     )
 
 diffusion = AutoEncoderGaussianDiffusion(
