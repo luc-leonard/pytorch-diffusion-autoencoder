@@ -8,7 +8,8 @@ from model.modules.unet_layers import UNetLayer
 
 LOGGER = logging.getLogger(__name__)
 
-
+# use the openAI one for the moment
+@DeprecationWarning
 class UNet(nn.Module):
     def __init__(
         self,

@@ -8,7 +8,8 @@ import torch
 
 LOGGER = logging.getLogger(__name__)
 
-
+# use the openAI one for the moment
+@DeprecationWarning
 class LatentEncoder(nn.Module):
     def __init__(
         self,
