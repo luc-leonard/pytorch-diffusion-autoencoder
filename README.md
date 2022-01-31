@@ -4,11 +4,9 @@ WIP: Unofficial implementation of diffusion autoencoders, using pytorch (https:/
 Special thanks for https://github.com/lucidrains/denoising-diffusion-pytorch and https://github.com/openai/guided-diffusion
 
 # Samples
-![sample](./sample/sample_1.png)
+![sample](./sample/grid.png)
 
-![sample](./sample/interpolation.gif)
-![sample](./sample/interpolation2.gif)
-![sample](./sample/interpolation3.gif)
+![sample](./sample/output.gif)
 
 # Status
 - [x] Models and train script
@@ -17,11 +15,14 @@ Special thanks for https://github.com/lucidrains/denoising-diffusion-pytorch and
 - [ ] latent diffusion
 - [ ] attribute manipulation on real images
 
+# pretrained models
+
+* FFHQ_64: https://mega.nz/file/zI9QkDhb#kQdOP_taaXyVVdgS0rJa0QIa_JQQUZXnasM2Q7S57bM
 # Usage
 
 `python scripts/sample_diffusion_autoencoder.py \ 
 --checkpoint-path=$PATH_TO_PREVIOUSLY_DOWNLOADED_CHECKPOINT \
---config-path =./config/mnist_256_small_ae.yml \`
+--config-path =./config/ffhq_64_openai.yml \`
 
 
 # Train your own

@@ -88,6 +88,7 @@ class Trainer(object):
         self.shown_images = 0
         self.fp16 = config.training.fp16
         self.scaler = torch.cuda.amp.GradScaler()
+        self.min_loss = torch.Tensor([float("inf")]).to(device)
         if checkpoint_path is not None:
             self.load(checkpoint_path)
             for param_group in self.opt.param_groups:
@@ -102,7 +103,7 @@ class Trainer(object):
         for param_group in self.opt.param_groups:
             param_group["lr"] = config.training.learning_rate
 
-        self.min_loss = torch.Tensor([float("inf")]).to(device)
+
 
     def add_model_to_tensorboard(self):
         ...
@@ -195,8 +196,9 @@ class Trainer(object):
             self.shown_images = checkpoint["shown_images"]
 
         if "ema_model_state_dict" in checkpoint and self.scheduler:
-            self.ema_model.load_state_dict(checkpoint["ema_model_state_dict"])
+            self.ema_model.load_state_dict(checkpoint["ema_model_state_dict"], strict=False)
         self.current_step = checkpoint["step"]
+        print(self.current_step)
         self.current_epoch = checkpoint["epoch"]
         self.min_loss = checkpoint["min_loss"]
 

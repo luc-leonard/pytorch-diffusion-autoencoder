@@ -1,4 +1,5 @@
 import itertools
+from typing import List
 
 import PIL.Image
 import click
@@ -9,7 +10,7 @@ import torchvision.utils
 import tqdm
 from PIL.Image import LANCZOS
 from torch import nn
-from torchvision.transforms import ToPILImage
+from torchvision.transforms import ToPILImage, ToTensor
 
 from torchvision.utils import make_grid
 
@@ -18,10 +19,18 @@ from utils.config import get_class_from_str
 import imageio
 
 
+def to_image(tensor):
+    tensor = (tensor + 1) / 2
+    return ToPILImage()(tensor.cpu())
+
+
+def make_grid_from_pil(images: List[PIL.Image.Image], *args, **kwargs) -> PIL.Image:
+    return make_grid([ToTensor()(image) for image in images], *args, **kwargs)
+
 @torch.no_grad()
-def show_interpolation(diffusion, model, x_1, x_2, steps=10, fps=2, i=0):
+def show_interpolation(diffusion, model, x_1, x_2, output=None, steps=10, fps=2):
     print("Generating interpolation")
-    video = imageio.get_writer(f"interpolation_{i}.gif", fps=fps)
+
     x_1_latent = diffusion.latent_encoder(x_1[None])
     x_2_latent = diffusion.latent_encoder(x_2[None])
 
@@ -38,16 +47,23 @@ def show_interpolation(diffusion, model, x_1, x_2, steps=10, fps=2, i=0):
         interpolations.squeeze(1),
         x_start=noise,
     )
-    y_s = torch.clamp(y_s, 0, 1)
 
+    x_1 = to_image(x_1.squeeze(0)).resize((128, 128), resample=LANCZOS)
+    x_2 = to_image(x_2.squeeze(0)).resize((128, 128), resample=LANCZOS)
+    y_0 = to_image(y_s[0]).resize((128, 128), resample=LANCZOS)
+    y_1 = to_image(y_s[-1]).resize((128, 128), resample=LANCZOS)
+
+    ToPILImage()(make_grid_from_pil([y_0, x_1, y_1, x_2], nrow=2)).save(output + '_grid.png')
+
+    video = imageio.get_writer(output, fps=fps)
     for y in y_s:
-        y = ToPILImage()(y.cpu())
+        y = to_image(y)
         y = y.resize((128, 128), LANCZOS)
         video.append_data(np.array(y))
-    # for y in reversed(y_s):
-    #     y = ToPILImage()(y.cpu())
-    #     y = y.resize((128, 128), LANCZOS)
-    #     video.append_data(np.array(y))
+    for y in reversed(y_s):
+        y = to_image(y)
+        y = y.resize((128, 128), LANCZOS)
+        video.append_data(np.array(y))
     video.close()
 
 
@@ -57,8 +73,9 @@ def show_interpolation(diffusion, model, x_1, x_2, steps=10, fps=2, i=0):
 @click.option("--checkpoint-path", "-p", type=str)
 @click.option("--path", "-p", type=str)
 @click.option("--path-2", "-p2", type=str)
+@click.option("--output", "-o", type=str, default='output.gif')
 @torch.no_grad()
-def sample(config_path, checkpoint_path, device="cpu", path=None, path_2=None):
+def sample(config_path, checkpoint_path, device="cpu", path=None, path_2=None, output=None):
     config = omegaconf.OmegaConf.load(config_path)
 
     model = get_class_from_str(config.model.target)(**config.model.params).to(device)
@@ -77,6 +94,7 @@ def sample(config_path, checkpoint_path, device="cpu", path=None, path_2=None):
         get_class_from_str(config.data.target)(**config.data.params)
     )
 
+
     if path:
         img = open_image(device, path)
 
@@ -86,17 +104,15 @@ def sample(config_path, checkpoint_path, device="cpu", path=None, path_2=None):
             noise = torch.randn((1, model.in_channels, *model.size)).to(img.device)
             y_s = diffusion.p_decode_loop(
                 (1, model.in_channels, *model.size), latent, x_start=noise
-            )
+            )[0]
 
-            y_s = (y_s + 1) / 2
-            img = (img + 1) / 2
-            y_s = nn.Upsample(scale_factor=2, mode="nearest")(y_s)[0]
-            img = nn.Upsample(scale_factor=2, mode="nearest")(img[None])[0]
+            y_s = to_image((y_s + 1) / 2)
+            img = to_image((img + 1) / 2)
 
-            ToPILImage()(torchvision.utils.make_grid([y_s, img])).show()
+            ToPILImage()(make_grid_from_pil([y_s, img])).save(output)
         else:
             img_2 = open_image(device, path_2)
-            show_interpolation(diffusion, model, img, img_2, i=0, steps=100, fps=25)
+            show_interpolation(diffusion, model, img, img_2, output=output, steps=50, fps=15)
     else:
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=2, shuffle=True, num_workers=0
@@ -105,7 +121,7 @@ def sample(config_path, checkpoint_path, device="cpu", path=None, path_2=None):
         for i, (xs, _) in enumerate(tqdm.tqdm(dataloader)):
             x_1 = xs[0].to(device)
             x_2 = xs[1].to(device)
-            show_interpolation(diffusion, model, x_1, x_2, i=i, fps=5, steps=10)
+            show_interpolation(diffusion, model, x_1, x_2, output=output, steps=50, fps=15)
             if i == 0:
                 break
 

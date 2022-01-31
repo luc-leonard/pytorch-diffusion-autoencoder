@@ -211,6 +211,11 @@ class ResBlock(TimestepBlock):
                 z_dim,
                 self.out_channels,
             ),
+            # nn.SiLU(),
+            # linear(
+            #     self.out_channels,
+            #     self.out_channels,
+            # ),
         )
         self.out_layers = nn.Sequential(
             normalization(self.out_channels),
@@ -515,7 +520,6 @@ class UNetModel(nn.Module):
                     )
                 ]
                 ch = int(mult * model_channels)
-                print(level, ds)
                 if ds in attention_resolutions:
                     layers.append(
                         AttentionBlock(
