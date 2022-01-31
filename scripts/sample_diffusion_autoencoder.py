@@ -41,7 +41,8 @@ def show_interpolation(diffusion, model, x_1, x_2, output=None, steps=10, fps=2)
         ]
     ).squeeze(1)
 
-    noise = torch.randn((steps, model.in_channels, *model.size)).to(x_1.device)
+    noise = torch.randn((1, model.in_channels, *model.size)).to(x_1.device).repeat_interleave(steps, dim=0)
+
     y_s = diffusion.p_decode_loop(
         (steps, model.in_channels, *model.size),
         interpolations.squeeze(1),
