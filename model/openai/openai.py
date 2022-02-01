@@ -57,7 +57,7 @@ class TimestepBlock(nn.Module):
     """
 
     @abstractmethod
-    def forward(self, x, emb, z):
+    def forward(self, x, emb, z, pos):
         """
         Apply the module to `x` given `emb` timestep embeddings.
         """
@@ -69,10 +69,10 @@ class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
     support it as an extra input.
     """
 
-    def forward(self, x, emb=None, z=None):
+    def forward(self, x, emb=None, z=None, pos=None):
         for layer in self:
             if isinstance(layer, TimestepBlock):
-                x = layer(x, emb, z)
+                x = layer(x, emb, z, pos)
             else:
                 x = layer(x)
         return x
@@ -169,7 +169,8 @@ class ResBlock(TimestepBlock):
         use_checkpoint=False,
         up=False,
         down=False,
-        z_dim=256
+        z_dim=256,
+        pos=False
     ):
         super().__init__()
         self.channels = channels
@@ -235,7 +236,7 @@ class ResBlock(TimestepBlock):
         else:
             self.skip_connection = conv_nd(dims, channels, self.out_channels, 1)
 
-    def forward(self, x, t_emb, z):
+    def forward(self, x, t_emb, z, pos):
         """
         Apply the block to a Tensor, conditioned on a timestep embedding.
 
@@ -244,10 +245,10 @@ class ResBlock(TimestepBlock):
         :return: an [N x C x ...] Tensor of outputs.
         """
         return checkpoint(
-            self._forward, (x, t_emb, z), self.parameters(), self.use_checkpoint
+            self._forward, (x, t_emb, z, pos), self.parameters(), self.use_checkpoint
         )
 
-    def _forward(self, x, emb=None, z=None):
+    def _forward(self, x, emb=None, z=None, pos=None):
         if self.updown:
             in_rest, in_conv = self.in_layers[:-1], self.in_layers[-1]
             h = in_rest(x)
@@ -263,7 +264,7 @@ class ResBlock(TimestepBlock):
             if self.use_scale_shift_norm:
                 out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
                 scale, shift = th.chunk(emb_out, 2, dim=1)
-                z_scale = self.z_emb_layers(z)[..., None, None]
+                z_scale = self.z_emb_layers(z).type(h.dtype)[..., None, None]
                 h = (1 + z_scale) * (out_norm(h) * (1 + scale) + shift)
                 h = out_rest(h)
             else:
@@ -642,6 +643,8 @@ class UNetModel(nn.Module):
             zero_module(conv_nd(dims, input_ch, out_channels, 3, padding=1)),
         )
 
+        self.downsampler = Downsample(1, False, 2, 1)
+
 
     def convert_to_fp16(self):
         """
@@ -659,7 +662,7 @@ class UNetModel(nn.Module):
         self.middle_block.apply(convert_module_to_f32)
         self.output_blocks.apply(convert_module_to_f32)
 
-    def forward(self, x, timesteps, z=None):
+    def forward(self, x, timesteps, z=None, pos=None):
 
         hs = []
         emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
@@ -892,6 +895,7 @@ class EncoderUNetModel(nn.Module):
 
 
         results = []
+
         h = x.type(self.dtype)
         for module in self.input_blocks:
             h = module(h, None)

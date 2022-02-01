@@ -86,7 +86,7 @@ class Trainer(object):
             self.scheduler = None
         self.current_step = 0
         self.current_epoch = 0
-        self.shown_images = 0
+        self.shown_wav = 0
         self.fp16 = config.training.fp16
         self.scaler = torch.cuda.amp.GradScaler()
         self.min_loss = torch.Tensor([float("inf")]).to(device)
@@ -103,8 +103,6 @@ class Trainer(object):
 
         for param_group in self.opt.param_groups:
             param_group["lr"] = config.training.learning_rate
-
-        self.mlp = MixedPrecisionTrainer(model=self.diffusion, use_fp16=self.fp16)
 
 
 
@@ -174,7 +172,7 @@ class Trainer(object):
                 "scaler": self.scaler.state_dict(),
                 "step": step,
                 "epoch": self.current_epoch,
-                "shown_images": self.shown_images,
+                "shown_images": self.shown_wav,
             },
             str(Path(self.run_path) / f"diffusion_{step}.pt"),
         ),
@@ -196,7 +194,7 @@ class Trainer(object):
         if self.fp16:
             self.scaler.load_state_dict(checkpoint["scaler"])
         if "shown_images" in checkpoint:
-            self.shown_images = checkpoint["shown_images"]
+            self.shown_wav = checkpoint["shown_images"]
 
         if "ema_model_state_dict" in checkpoint and self.scheduler:
             self.ema_model.load_state_dict(checkpoint["ema_model_state_dict"], strict=False)
@@ -233,12 +231,12 @@ class Trainer(object):
         step = self.current_step
         pbar = tqdm.tqdm(self.train_dataloader)
 
-        for image, _ in pbar:
-            image = image.to(device)
-            self.shown_images = self.shown_images + image.shape[0]
+        for audio, _ in pbar:
+            audio = audio.to(device)
+            self.shown_wav = self.shown_wav + audio.shape[0]
 
             with torch.cuda.amp.autocast(enabled=self.fp16):
-                loss = self.diffusion(image)
+                loss = self.diffusion(audio)
             if torch.isnan(loss):
                 LOGGER.warn("NaN loss, reloading last good checkpoint")
                 self.load(Path(self.run_path) / "last.pt")
@@ -257,7 +255,7 @@ class Trainer(object):
 
             if step % self.sample_every == 0:
                 self.step_ema(step)
-                self.sample("train", image[0], step)
+                self.sample("train", audio[0], step)
             if step % self.save_every == 0:
                 self.step_ema(step)
                 self.save(step)
@@ -289,7 +287,7 @@ class Trainer(object):
         )
         self.tb_writer.add_scalar("train/epoch", epoch, step)
         self.tb_writer.add_scalar("train/lr", self.opt.param_groups[0]["lr"], step)
-        self.tb_writer.add_scalar("train/shown_images", self.shown_images, step)
+        self.tb_writer.add_scalar("train/shown_images", self.shown_wav, step)
 
     @torch.no_grad()
     def _do_valid(self):
@@ -314,16 +312,21 @@ class Trainer(object):
     def sample(self, stage, x, step):
         self.diffusion.eval()
         generated, latent = self.diffusion.p_sample_loop(
-            (1, self.model.out_channels, *self.model.size), x[None]
+            (1, self.model.in_channels, *self.model.size), x[None]
         )
         print(generated.shape)
-        generated = (generated + 1) / 2
-        original = (x + 1) / 2
         self.diffusion.train()
-        self.tb_writer.add_image(
-            f"{stage}/image",
-            torchvision.utils.make_grid([generated[0], original], nrow=3),
+        self.tb_writer.add_audio(
+            f"{stage}/audio",
+            generated[0].cpu().numpy(),
             step,
+            sample_rate=16000
+        )
+        self.tb_writer.add_audio(
+            f"{stage}/real",
+            x.cpu().numpy(),
+            step,
+            sample_rate=16000
         )
 
 

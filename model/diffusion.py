@@ -1,9 +1,13 @@
+import random
+
 import albumentations
 import numpy as np
 import torch
 import torch.nn.functional as F
+from albumentations import get_random_crop_coords
 from denoising_diffusion_pytorch import GaussianDiffusion
 from denoising_diffusion_pytorch.denoising_diffusion_pytorch import noise_like
+from torchvision.transforms import ToPILImage
 from tqdm import tqdm
 
 from utils.config import default
@@ -13,6 +17,10 @@ class AutoEncoderGaussianDiffusion(GaussianDiffusion):
     def __init__(self, *args, latent_encoder, **kwargs):
         super().__init__(*args, **kwargs)
         self.latent_encoder = latent_encoder
+
+    def convert_to_fp16(self):
+        self.latent_encoder.convert_to_fp16()
+        self.denoise_fn.convert_to_fp16()
 
     def p_mean_variance(self, x, t, clip_denoised: bool, latent=None):
         x_recon = self.predict_start_from_noise(
@@ -103,11 +111,15 @@ class PatchAutoEncoderGaussianDiffusion(GaussianDiffusion):
         super().__init__(*args, **kwargs)
         self.latent_encoder = latent_encoder
         self.patch_size = patch_size
-        self.cropper = albumentations.RandomCrop(patch_size, patch_size, True)
+        #self.cropper = albumentations.RandomCrop(patch_size, patch_size, True)
 
     def p_mean_variance(self, x, t, clip_denoised: bool, latent=None):
+        b, c, h, w = x.shape
+        coords = torch.tensor(np.arange(h * w).reshape(h, w)).to('cuda')[None, None] / (h*w)
+        x_with_coords = torch.cat([x, coords], dim=1)
+
         x_recon = self.predict_start_from_noise(
-            x, t=t, noise=self.denoise_fn(x, t, latent)
+            x, t=t, noise=self.denoise_fn(x_with_coords, t, latent)
         )
 
         if clip_denoised:
@@ -133,10 +145,10 @@ class PatchAutoEncoderGaussianDiffusion(GaussianDiffusion):
     def p_sample_loop(self, shape, x):
         device = self.betas.device
         b, c, h, w = x.shape
+
         img = torch.randn(shape, device=device)
         latent = self.latent_encoder(x)
 
-        coords = np.arange(h * w).reshape(h, w)
         for i in tqdm(
             reversed(range(0, self.num_timesteps)),
             desc="sampling loop time step",
@@ -155,9 +167,11 @@ class PatchAutoEncoderGaussianDiffusion(GaussianDiffusion):
     def p_decode_loop(self, shape, latent, x_start=None):
         device = self.betas.device
 
-        b = shape[0]
+        b, c, h, w = shape
+        coords = np.arange(h * w).reshape(h, w)
 
         img = x_start if x_start is not None else torch.randn(shape, device=device)
+        img = torch.stack([img, coords], dim=1)
 
         for i in tqdm(
             reversed(range(0, self.num_timesteps)),
@@ -169,16 +183,34 @@ class PatchAutoEncoderGaussianDiffusion(GaussianDiffusion):
             )
         return img
 
+    def get_random_crop_coords(self, x_start):
+        b, c, h, w = x_start.shape
+        w_start = random.random()
+        h_start = random.random()
+
+        crop_height = self.patch_size
+        crop_width = self.patch_size
+        y1 = int((h - crop_height) * h_start)
+        y2 = y1 + crop_height
+
+        x1 = int((w - crop_width) * w_start)
+        x2 = x1 + crop_width
+
+        return y1, y2, x1, x2
+
     def p_losses(self, x_start, t, class_id=None, noise=None):
         b, c, h, w = x_start.shape
-        noise = default(noise, lambda: torch.randn_like(x_start))
+
 
         x_latent = self.latent_encoder(x_start)
-        coords = np.arange(h * w).reshape(h, w)
-        cropped = self.cropper(image=x_start, coords=coords)
+        coords = torch.tensor(np.arange(h * w).reshape(h, w)).to(x_start.device)
 
-        x_cropped = cropped["image"]
-        coords_cropped = cropped["coords"]
+        y1, y2, x1, x2 = self.get_random_crop_coords(x_start)
+        x_cropped = x_start[:, :, y1:y2, x1:x2]
+
+        coords_cropped = coords[y1:y2, x1:x2][None].repeat_interleave(b, dim=0).unsqueeze(1) / (h*w)
+        noise = default(noise, lambda: torch.randn_like(x_cropped))
+
         x_cropped_noisy = self.q_sample(x_start=x_cropped, t=t, noise=noise)
 
         # coords are added as an additional channel
@@ -196,12 +228,11 @@ class PatchAutoEncoderGaussianDiffusion(GaussianDiffusion):
         return loss
 
 
-class PatchAutoEncoderWaveGaussianDiffusion(GaussianDiffusion):
-    def __init__(self, *args, latent_encoder, patch_size, **kwargs):
+class AutoEncoderWaveGaussianDiffusion(GaussianDiffusion):
+    def __init__(self, *args, sample_rate, latent_encoder, **kwargs):
         super().__init__(*args, **kwargs)
         self.latent_encoder = latent_encoder
-        self.patch_size = patch_size
-        self.cropper = albumentations.RandomCrop(patch_size, patch_size, True)
+        self.sample_rate = sample_rate
 
     def p_mean_variance(self, x, t, clip_denoised: bool, latent=None):
         x_recon = self.predict_start_from_noise(
@@ -234,7 +265,6 @@ class PatchAutoEncoderWaveGaussianDiffusion(GaussianDiffusion):
         img = torch.randn(shape, device=device)
         latent = self.latent_encoder(x)
 
-        coords = np.arange(l)
         for i in tqdm(
             reversed(range(0, self.num_timesteps)),
             desc="sampling loop time step",
@@ -272,17 +302,10 @@ class PatchAutoEncoderWaveGaussianDiffusion(GaussianDiffusion):
         noise = default(noise, lambda: torch.randn_like(x_start))
 
         x_latent = self.latent_encoder(x_start)
-        coords = np.arange(l)
-        cropped = self.cropper(image=x_start, coords=coords)
 
-        x_cropped = cropped["image"]
-        coords_cropped = cropped["coords"]
-        x_cropped_noisy = self.q_sample(x_start=x_cropped, t=t, noise=noise)
+        x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
 
-        # coords are added as an additional channel
-        x_cropped_noisy = torch.cat([x_cropped_noisy, coords_cropped], dim=1)
-
-        x_cropped_predicted_noise = self.denoise_fn(x_cropped_noisy, t, x_latent)
+        x_cropped_predicted_noise = self.denoise_fn(x_noisy, t, x_latent)
 
         if self.loss_type == "l1":
             loss = (noise - x_cropped_predicted_noise).abs().mean()

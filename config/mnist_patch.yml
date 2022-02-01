@@ -1,34 +1,33 @@
 model:
-  target: model.unet.UNet
+  target: model.openai.openai.UNetModel
   params:
-    timestep_embed: 16
-    size: [8, 8] # patch size
-    in_channels: 1
+    image_size: [8, 8]
+    in_channels: 2
     out_channels: 1
-    base_hidden_channels: 64
-    n_layers: 2
-    inner_layers: [3,3]
-    chan_multiplier: [1,2]
-    attention_layers: [False, True]
+    model_channels: 64
+    num_res_blocks: 2
+    channel_mult: [1,2]
+    attention_resolutions: [8]
+    use_scale_shift_norm: True
     z_dim: 256
 
 encoder:
-  target: model.latent_encoder.LatentEncoder
+  target: model.openai.openai.EncoderUNetModel
   params:
+    image_size: [32, 32]
+    pool: spatial_v2
     in_channels: 1
-    base_hidden_channels: 64
-    n_layers: 3
-    chan_multiplier: [1,2,4]
-    inner_layers: [3,3,3]
-    linear_layers: [448, 512, 256]
-    attention_layers: [False, True, False]
-    z_dim: 256
-    dropout: 0.1
+    out_channels: 256
+    model_channels: 64
+    num_res_blocks: 2
+    channel_mult: [1,2]
+    attention_resolutions: [8]
+    use_scale_shift_norm: True
 
 diffusion:
   target: model.diffusion.PatchAutoEncoderGaussianDiffusion
   params:
-    image_size: 32
+    size: [32, 32]
     patch_size: 8
     timesteps: 1000
 
@@ -42,7 +41,7 @@ training:
   grandient_accumulation_steps: 1
   grad_clip: 1
   ema_decay: 0.995
-  fp16: true
+  fp16: False
 
 data:
   target: data.mnist.QMNIST

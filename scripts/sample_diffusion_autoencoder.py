@@ -57,15 +57,29 @@ def show_interpolation(diffusion, model, x_1, x_2, output=None, steps=10, fps=2)
     ToPILImage()(make_grid_from_pil([y_0, x_1, y_1, x_2], nrow=2)).save(output + '_grid.png')
 
     video = imageio.get_writer(output, fps=fps)
+    for i in range(fps):
+        y = to_image(y_s[0])
+        y = y.resize((128, 128), LANCZOS)
+        video.append_data(np.array(y))
+
     for y in y_s:
         y = to_image(y)
         y = y.resize((128, 128), LANCZOS)
         video.append_data(np.array(y))
+
+    for i in range(fps):
+        y = to_image(y_s[-1])
+        y = y.resize((128, 128), LANCZOS)
+        video.append_data(np.array(y))
+
     for y in reversed(y_s):
         y = to_image(y)
         y = y.resize((128, 128), LANCZOS)
         video.append_data(np.array(y))
+
     video.close()
+
+
 
 
 @click.command()

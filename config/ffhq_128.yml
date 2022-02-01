@@ -4,9 +4,9 @@ model:
     image_size: [128, 128]
     in_channels: 3
     out_channels: 3
-    model_channels: 64
+    model_channels: 128
     num_res_blocks: 2
-    channel_mult: [1,2,2,4]
+    channel_mult: [1,1,2,3,4]
     attention_resolutions: [16]
     use_scale_shift_norm: True
     z_dim: 512
@@ -14,30 +14,30 @@ model:
 encoder:
   target: model.openai.openai.EncoderUNetModel
   params:
-    image_size: [64, 64]
+    image_size: [128, 128]
     pool: spatial_v2
     in_channels: 3
     out_channels: 512
-    model_channels: 64
+    model_channels: 128
     num_res_blocks: 2
-    channel_mult: [1,2,4,4,8]
+    channel_mult: [1,1,2,3,4,4]
     attention_resolutions: [16]
     use_scale_shift_norm: True
 
 diffusion:
   target: model.diffusion.AutoEncoderGaussianDiffusion
   params:
-    image_size: 64
+    image_size: 128
     timesteps: 1000
     loss_type: l2
 
 
 training:
-  batch_size: 128
+  batch_size: 16
   learning_rate: 1e-4
   save_every: 10000
   sample_every: 500
-  grandient_accumulation_steps: 1
+  grandient_accumulation_steps: 8
   grad_clip: 1
   ema_decay: 0.995
   epochs: 500
@@ -49,4 +49,5 @@ training:
 data:
   target: data.ffhq.FFHQDataset
   params:
-    root: ./dataset/ffhq-64
+    root: /media/lleonard/big_slow_disk/datasets/ffhq/
+    resize: [128, 128]
