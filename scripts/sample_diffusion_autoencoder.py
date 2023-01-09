@@ -121,8 +121,8 @@ def sample(config_path, checkpoint_path, device="cpu", path=None, path_2=None, o
                 (1, model.in_channels, *model.size), latent, x_start=noise
             )[0]
 
-            y_s = to_image((y_s + 1) / 2)
-            img = to_image((img + 1) / 2)
+            y_s = to_image(y_s)
+            img = to_image(img)
 
             ToPILImage()(make_grid_from_pil([y_s, img])).save(output)
         else:
