@@ -27,7 +27,7 @@ encoder:
 diffusion:
   target: model.diffusion.AutoEncoderGaussianDiffusion
   params:
-    size: [64, 64]
+    image_size: [64, 64]
     timesteps: 1000
     loss_type: l2
 
